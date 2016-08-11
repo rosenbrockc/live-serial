@@ -1,3 +1,5 @@
+[![Coverage Status](https://coveralls.io/repos/github/rosenbrockc/live-serial/badge.svg?branch=master)](https://coveralls.io/github/rosenbrockc/live-serial?branch=master)
+
 # `live-serial`: real-time serial port plotter/logger
 
 `live-serial` is a simple package that ties `pyserial`, `matplotlib` and
