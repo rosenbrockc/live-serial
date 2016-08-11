@@ -73,18 +73,26 @@ def _parser_options():
                               "this value is low, the thread will return data "
                               "in finer grained chunks, with more accurate "
                               "timestamps, but it will also consume more CPU."))
-    parser.add_argument("-refresh", type=int, default=20,
+    parser.add_argument("-refresh", type=int, default=100,
                         help=("How often (in milliseconds) to plot new data "
                               "obtained from the serial port."))
-    parser.add_argument("-buffertime", type=int, default=20,
+    parser.add_argument("-buffertime", type=float, default=50,
                         help=("How often (in milliseconds) to query buffered data "
                               "obtained from the serial port."))
-    parser.add_argument("-logfreq", type=int, default=10,
+    parser.add_argument("-logfreq", type=float, default=10,
                         help=("How often (in *seconds*) to save the buffered "
                               "data points to CSV."))
     parser.add_argument("-method", default="average",
                         help=("Specifies how buffered data is aggregated each "
                               "time it is read from the serial port."))
+    parser.add_argument("-listen", action="store_true",
+                        help=("Prints the raw output from the serial port "
+                              "instead of plotting and logging it. Useful "
+                              "for debugging port connection issues."))
+    parser.add_argument("-virtual", action="store_true",
+                        help=("Specifies that the port being connected to is "
+                              "virtual (e.g., with `socat`), which changes the "
+                              "parameters for connection."))
     args = base.exhandler(examples, parser)
 
     if args["port"] == "list":
@@ -96,32 +104,45 @@ def _parser_options():
         if not _list_serial(args["port"]):
             msg.err("Port '{}' is not valid.".format(args["port"]))
             exit(0)
+
+    #Convert the units for the buffer and refresh times.
+    args["refresh"] /= 1000.
+    args["buffertime"] /= 1000.
     
     if args["noplot"] and not args["logdir"]:
-        msg.warn("Data will only be logged if `-logdir` is specified.")
+        msg.warn("Data will only be logged if `-logdir` is specified.", -1)
+
     return args
 
 def _get_com(args):
     """Gets a configured COM port for serial communication.
     """
-    from liveserial.monitor import ComMonitorThread, get_item_from_queue
+    from liveserial.monitor import ComMonitorThread
     from Queue import Queue
     msg.info("Starting monitoring of port '{}'.".format(args["port"]), 2)
     dataq, errorq = Queue(), Queue()
     com = ComMonitorThread(dataq, errorq, args["port"], args["baudrate"],
-                           args["stopbits"], args["parity"], args["timeout"])
-    com.start()  
+                           args["stopbits"], args["parity"], args["timeout"],
+                           args["listen"], args["virtual"])
+    return com
+
+def _com_start(com):
+    """Starts the serial port communication thread using the specified object.
+    """
+    from liveserial.monitor import get_item_from_queue
+    com.start()
     msg.okay("COM monitoring thread started.", 2)
 
     #Even though the thread is going, it doesn't mean that everything is working
-    #the way we hope. Check the first item.
-    com_error = get_item_from_queue(errorq)
+    #the way we hope. Check the first item. We have to sleep to give it time to
+    #initialize.
+    from time import sleep
+    sleep(0.05)    
+    com_error = get_item_from_queue(com.error_q)
     if com_error is not None:
         msg.err("monitor thread error--{}".format(com_error))
         com = None
-
-    return com
-
+    
 def run(args):
     """Starts monitoring of the serial data in a separate thread. Starts the
     plotting or logging based on command-line args.
@@ -129,6 +150,7 @@ def run(args):
     #Get the serial port for communications; this also tests that we are getting
     #data.
     com = _get_com(args)
+
     #The data feed keeps track of the latest, aggregated data selected from the
     #buffer in the com thread.
     from liveserial.monitor import LiveDataFeed
@@ -139,15 +161,43 @@ def run(args):
     from liveserial.logging import Logger
     logger = Logger(args["buffertime"], com.data_q, com.error_q, feed,
                     args["method"], args["logdir"], args["logfreq"])
-    logger.start()
+    
+    import signal
+    def exit_handler(signal, frame):
+        """Cleans up the serial communication and logging.
+        """
+        msg.warn("SIGINT >> cleaning up threads.", -1)
+        com.join()
+        logger.stop()
+        exit(0)
+        #Matplotlib's cleanup code for animations is lousy--it doesn't
+        #work. I tried calling the private _stop() in a relevant scope and
+        #it still let the application hang.
+    signal.signal(signal.SIGINT, exit_handler)
+
+    #Now that we actually have a way to quit the infinite loop, we can start the
+    #data acquisition process.
+    _com_start(com)
+    
+    #Wait until we have some data before the logger gets put to work with it.
+    if not args["listen"]:
+        from time import sleep
+        while com.data_q.empty():
+            sleep(0.05)
+        logger.start()
+    
     #The plotter looks at the live feed data to plot the latest aggregated
     #points.
-    if not args["noplot"]:
+    if not args["noplot"] and not args["listen"]:
         while not logger.ready():
             pass
         from liveserial.plotting import Plotter
+        import matplotlib.pyplot as plt
         plotter = Plotter(feed, args["refresh"])
-        plotter.animate()
-    
+        plt.show()
+        
+    while com.is_alive():
+        com.join(1, terminate=False)
+        
 if __name__ == '__main__':
     run(_parser_options())

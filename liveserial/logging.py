@@ -53,8 +53,12 @@ class Logger(object):
         """Returns True once we have accumulated a few timer calls of data. This
         ensures that we know how many sensors are running on the same COM port.
         """
-        datapoints = sum([len(v) for v in self.csvdata.values()])/len(self.csvdata)
-        return self._timer_calls > 5 and datapoints > 2    
+        havepts = False
+        if len(self.csvdata) > 0:
+            datapoints = sum([len(v) for v in self.csvdata.values()])/len(self.csvdata)
+            havepts = datapoints > 2
+
+        return self._timer_calls > 5 and (self.logdir is None or havepts)
         
     def start(self):
         """Starts a new timer for the configured interval to gather data from
@@ -63,7 +67,7 @@ class Logger(object):
         if not self._cancel:
             from threading import Timer
             self.timer = Timer(self.interval, self._read_serial)
-            timer.start()
+            self.timer.start()
 
     def stop(self):
         """Stops the automatic collection and logging of data.
@@ -78,15 +82,16 @@ class Logger(object):
         """Reads the latest buffered serial information and places it onto the live
         feed for the application.
         """
+        self._timer_calls += 1
         from liveserial.monitor import get_all_from_queue
         sensedata = {}
         havedata = False
-        for sensor, timestamp, qdata in get_all_from_queue(dataq):
+        for sensor, timestamp, qdata in get_all_from_queue(self.dataq):
             if sensor not in sensedata:
                 sensedata[sensor] = []
             sensedata[sensor].append((timestamp, qdata))
             havedata = True
-            
+
         # We average/discard the data in the queue to produce the single entry that
         # will be posted to the livefeed.
         if havedata:
@@ -95,10 +100,10 @@ class Logger(object):
                 if self.method == "average":
                     #We use the last data point's time stamp as the authoritative
                     #one for the averaged set.
-                    tstamp = qdata[-1][1]
+                    tstamp = qdata[-1][0]
                     #For the values, we take a simple mean.
                     from numpy import mean
-                    data = (mean([d[2] for d in qdata]), tstamp)
+                    data = (tstamp, mean([d[1] for d in qdata]))
                 elif self.method == "last":
                     data = qdata[-1]
 
@@ -108,10 +113,12 @@ class Logger(object):
                     if sensor not in self.csvdata:
                         self.csvdata[sensor] = []
                     self.csvdata[sensor].append(data)
+                else:
+                    print("{0: <20f}  {1: <20f}".format(*data))
 
-        #Before we restart the timer again, see if we need to save the data to
-        #CSV.
-        self.save()
+            #Before we restart the timer again, see if we need to save the data to
+            #CSV.
+            self.save()
         self.start()
 
     def _csv_append(self):
@@ -121,10 +128,12 @@ class Logger(object):
         from os import path
         import csv
         for sensor in self.csvdata:
+            if self.logdir is None:
+                continue
             logpath = path.join(self.logdir, "{}.csv".format(sensor))
             if not path.isfile(logpath):
                 with open(logpath, 'w') as f:
-                    f.write("Time,Value")
+                    f.write("Time,Value\n")
 
             with open(logpath, 'a') as f:
                 writer = csv.writer(f)
@@ -145,8 +154,8 @@ class Logger(object):
             elapsed = (datetime.fromtimestamp(time()) -
                        datetime.fromtimestamp(self.lastsave)).total_seconds()
         else:
-            elapsed = self.savefreq + 1
+            elapsed = self.logfreq + 1
 
-        if elapsed > self.savefreq:
+        if elapsed > self.logfreq:
             self._csv_append()
             self.lastsave = time()

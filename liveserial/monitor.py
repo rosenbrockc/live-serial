@@ -3,6 +3,8 @@ that the main UI thread is not blocked or slowed. Code adapted from
 https://github.com/mba7/SerialPort-RealTime-Data-Plotter/blob/master/com_monitor.py
 """
 import threading, serial
+import Queue
+from liveserial import msg
 class ComMonitorThread(threading.Thread):
     """ A thread for monitoring a COM port. The COM port is 
         opened when the thread is started.
@@ -36,16 +38,18 @@ class ComMonitorThread(threading.Thread):
             value is low, the thread will return data in finer
             grained chunks, with more accurate timestamps, but
             it will also consume more CPU.
-
+        listener (bool): specifies that this COMThread is a listener, which prints
+            out the raw stream in real-time, but doesn't analyze it.
     Attributes:
-    alive (threading.Event): event for asynchronously handling the reads from
-            the serial port.
-    serial_arg (dict): arguments used to contstruct the :class:`serial.Serial`.
-    serial_port (serial.Serial): serial instance for communication.
+        alive (threading.Event): event for asynchronously handling the reads from
+          the serial port.
+        serial_arg (dict): arguments used to contstruct the :class:`serial.Serial`.
+        serial_port (serial.Serial): serial instance for communication.
     """
     def __init__(self, data_q, error_q, port, port_baud,
                  port_stopbits=serial.STOPBITS_ONE,
-                 port_parity=serial.PARITY_NONE, port_timeout  = 0.01):
+                 port_parity=serial.PARITY_NONE, port_timeout  = 0.01,
+                 listener=False, virtual=False):
         threading.Thread.__init__(self)
         
         self.serial_port = None
@@ -54,9 +58,13 @@ class ComMonitorThread(threading.Thread):
                                 stopbits  = port_stopbits,
                                 parity    = port_parity,
                                 timeout   = port_timeout)
-
+        if virtual:
+            self.serial_arg["dsrdtr"] = True
+            self.serial_arg["rtscts"] = True
+            
         self.data_q   = data_q
         self.error_q  = error_q
+        self.listener = listener
         self.alive    = threading.Event()
         self.alive.set()
         
@@ -69,43 +77,52 @@ class ComMonitorThread(threading.Thread):
             if self.serial_port: 
                 self.serial_port.close()
             self.serial_port = serial.Serial(**self.serial_arg)
+            msg.info("Serial port communication enabled.", 2)
         except serial.SerialException, e:
             self.error_q.put(e.message)
             return
-        
-        # Restart the clock
+
         from time import time
-        startTime = time()
-        
+        start = time()
+        sensor = "W"
+        lastlisten = None
         while self.alive.isSet():
-            Line = self.serial_port.readline()
-            bytes = Line.split()
-            print bytes
-            #use map(int) for simulation
-            data = map(ord, bytes)
-            qdata = [0,0,0]
-            print(len(data), data)
-            if len(data) == 6:
-                timestamp = time() - startTime
-                print "Line", Line
-                print "bytes", bytes
-                print "data", data
-                self.data_q.put((sensor, timestamp, qdata))
+            line = self.serial_port.readline()
+            if self.listener:
+                if lastlisten is None or time() - lastlisten > 0.05:
+                    print(line)
+                    lastlisten = time()
+                continue
+                    
+            raw = line.split()
+            if len(raw) == 2:
+                timestamp = time() - start
+                try:
+                    qdata = float(raw[1])
+                    self.data_q.put((sensor, timestamp, qdata))
+                except ValueError:
+                    # There must have been a communication glitch; just ignore
+                    # this data point.
+                    pass
             
         # clean up
         if self.serial_port:
             self.serial_port.close()
-
-    def join(self, timeout=None):
+            
+    def join(self, timeout=None, terminate=True):
         """Tells the thread monitoring the COM port to clean up and return.
 
         Args:
             timeout (float): number of seconds (or fractions of seconds) to wait
-              until forcibly closing the thread. If `None`, then the operation will
+              until returning. If `None`, then the operation will
               block until the thread terminates. See also
               :meth:`threading.Thread.join`.
+            terminate (bool): when True, the data collection is told to stop before
+              trying to join the underlying thread; otherwise, the thread will
+              keep processing data until join is called with terminate=True.
         """
-        self.alive.clear()
+        if terminate:
+            self.alive.clear()
         threading.Thread.join(self, timeout)
 
 def enumerate_serial_ports():
@@ -136,9 +153,10 @@ def get_all_from_queue(Q):
     Args:
         Q (Queue.Queue): queue to empty items from.
     """
+    msg.info("Retrieving entire queue.", 2)
     try:
         while True:
-            yield Q.get_nowait( )
+            yield Q.get_nowait()
     except Queue.Empty:
         raise StopIteration
 

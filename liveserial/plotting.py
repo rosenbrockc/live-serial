@@ -1,6 +1,11 @@
 """Methods for plotting the real-time data feed.
 """
 from matplotlib import cm
+import matplotlib.animation as animation
+import matplotlib
+matplotlib.use('TkAgg')
+from liveserial import msg
+
 def colorspace(size, cmap=cm.rainbow):
     """Returns an cycler over a linear color space with 'size' entries.
     
@@ -44,41 +49,34 @@ class Plotter(animation.TimedAnimation):
         subplots show up in the figure.
         """
         
-    def animate(self):
-        """Starts an animation by getting data from the specified function.
-
-        Args:
-        datafun (function): will be called every 'interval' milliseconds to get new
-          data points to plot.
-        interval (int): number of milliseconds between fetching of data and drawing
-          on the canvas.
-        """
         #Find out how many subplots we will need; sort their keys for plotting.
         self._plotorder = sorted(self.livefeed.cur_data.keys())
         import matplotlib.pyplot as plt
-        import matplotlib.animation as animation
+        from matplotlib.lines import Line2D
 
         #We are going to use a common time axis
-        fig, axes = plt.subplots(len(self.livefeed.cur_data), 1, sharex=True)
+        fig, axes = plt.subplots(len(self.livefeed.cur_data), 1, sharex=True,
+                                 squeeze=False)
         cspace = colorspace(len(axes))[0]
         from collections import deque
         for isense, sensor in enumerate(self._plotorder):
-            axes[isense].set_xlabel('t')
-            axes[isense].set_ylabel(sensor)
+            axes[isense,0].set_xlabel('t')
+            axes[isense,0].set_ylabel(sensor)
             line = Line2D([], [], color=cspace[isense])
-            axes[isense].add_line(line)
+            axes[isense,0].add_line(line)
             self.lines[sensor] = line
             self.ts[sensor] = deque(maxlen=self.maxlen)
             self.ys[sensor] = deque(maxlen=self.maxlen)
-            
+
         from os import name
         if name != "nt":
-            animation.TimedAnimation.__init__(self, fig, interval=interval,
-                                              blit=False)
+            animation.TimedAnimation.__init__(self, fig, blit=False)
         else:
-            animation.TimedAnimation.__init__(self, fig, interval=interval,
-                                              blit=True)
-        plt.show()
+            super(Plotter, self).__init__(self, fig, blit=True)
+        msg.info("Plotting animation configured.", 2)
+
+    def new_frame_seq(self):
+        return iter(range(self.maxlen))
         
     def _draw_frame(self, iframe):
         """Draws the latest frame for each sensor on the relevant plot.
@@ -88,11 +86,11 @@ class Plotter(animation.TimedAnimation):
             t, y = self.livefeed.read_data(sensor)
             self.ts[sensor].append(t)
             self.ys[sensor].append(y)
-            self.lines[sensor].set_data(self.ts, self.ys)
+            self.lines[sensor].set_data(self.ts[sensor], self.ys[sensor])
 
         self._drawn_artists = [self.lines[s] for s in self._plotorder]
         
     def _init_draw(self):
         """Initializes all the subplot line objects to be empty."""
-        for l in self.lines.values:
+        for l in self.lines.values():
             l.set_data([], [])
