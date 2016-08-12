@@ -76,7 +76,7 @@ def _parser_options():
     parser.add_argument("-refresh", type=int, default=100,
                         help=("How often (in milliseconds) to plot new data "
                               "obtained from the serial port."))
-    parser.add_argument("-buffertime", type=float, default=50,
+    parser.add_argument("-buffertime", type=float, default=25,
                         help=("How often (in milliseconds) to query buffered data "
                               "obtained from the serial port."))
     parser.add_argument("-logfreq", type=float, default=10,
@@ -160,7 +160,8 @@ def run(args):
     #periodically saved to CSV.
     from liveserial.logging import Logger
     logger = Logger(args["buffertime"], com.data_q, com.error_q, feed,
-                    args["method"], args["logdir"], args["logfreq"])
+                    args["method"], args["logdir"], args["logfreq"],
+                    not args["noplot"])
     
     import signal
     def exit_handler(signal, frame):
@@ -169,6 +170,7 @@ def run(args):
         msg.warn("SIGINT >> cleaning up threads.", -1)
         com.join()
         logger.stop()
+        print("")
         exit(0)
         #Matplotlib's cleanup code for animations is lousy--it doesn't
         #work. I tried calling the private _stop() in a relevant scope and

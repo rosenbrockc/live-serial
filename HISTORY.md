@@ -7,3 +7,6 @@
   plotting the data using the animation functionality in `matplotlib`.
 - Added the script arguments to tune the functionality of the serial, logging
   and plotting modules.
+- Added a virtual serial port simulator (based on `socat`) to simulate multiple
+  sensors returning data simultaneously.
+- Finished debugging the plots and logging.

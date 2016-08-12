@@ -1,6 +1,7 @@
 """Module that sets up a virtual serial port for unit testing.
 """
 import threading
+from liveserial import msg
 class ComSimulatorThread(threading.Thread):
     """Simulates a sine wave, masquerading as a separate COM port on the machine so
     that we can unit test the code against it.
@@ -17,7 +18,7 @@ class ComSimulatorThread(threading.Thread):
         alive (threading.Event): event for asynchronously handling the reads from
           the serial port.
     """
-    def __init__(self, port="com1", sensors=["W", "K"], dataform=(int, float),
+    def __init__(self, port="com1", sensors=["W", "K", "R"], dataform=(int, float),
                  seed=42):
         threading.Thread.__init__(self)
         self.dataform = dataform
@@ -44,8 +45,9 @@ class ComSimulatorThread(threading.Thread):
         
         while self.alive.isSet():
             #Choose one of the sensors at random to generate data for.
-            sensor = random.choice(self.sensors)
-            raw = []
+            randsense = int(len(self.sensors)*random.random())
+            sensor = self.sensors[randsense]
+            raw = [sensor]
             for t in self.dataform:
                 if t is int:
                     raw.append(random.randint(0, 100))
@@ -70,6 +72,8 @@ class ComSimulatorThread(threading.Thread):
         """
         if terminate:
             self.alive.clear()
+            self.serial.cancel_write()
+            self.serial.flushOutput()
         threading.Thread.join(self, timeout)
 
 if __name__ == '__main__':
@@ -81,11 +85,10 @@ if __name__ == '__main__':
     def exit_handler(signal, frame):
         """Cleans up the serial communication, plotting and logging.
         """
-        from liveserial import msg
-        msg.warn("SIGINT >> cleaning up threads.", -1)
-        simsig.join()
+        print("")
+        simsig.join(1)
+        
     signal.signal(signal.SIGINT, exit_handler)
-
     simsig.start()
     while simsig.is_alive():
         simsig.join(1, terminate=False)

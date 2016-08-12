@@ -5,6 +5,7 @@ import matplotlib.animation as animation
 import matplotlib
 matplotlib.use('TkAgg')
 from liveserial import msg
+import numpy as np
 
 def colorspace(size, cmap=cm.rainbow):
     """Returns an cycler over a linear color space with 'size' entries.
@@ -31,17 +32,20 @@ class Plotter(animation.TimedAnimation):
           `matplotlib` plotting function.
 
     Attributes:
-        lines (dict): of :class:`matplotlib.axes.Axes` being animated with the
+        lines (dict): of :class:`matplotlib.lines.Line2D` being animated with
+          the serial data; keyed by the sensor identifiers.
+        axes (dict): of :class:`matplotlib.axes.Axes` being animated with the
           serial data; keyed by the sensor identifiers.
         ts (dict): of lists of the last `maxlen` sensor timestamp readings.
         ys (dict): of lists of the last `maxlen` sensor value readings.
     """
-    def __init__(self, livefeed, interval, maxlen=250, **plotargs):
+    def __init__(self, livefeed, interval, maxlen=100, **plotargs):
         self.livefeed = livefeed
         self.interval = interval
         self.maxlen = maxlen
         self.plotargs = plotargs
         self.lines = {}
+        self.axes = {}
         self.ts = {}
         self.ys = {}
         self._plotorder = []
@@ -56,7 +60,8 @@ class Plotter(animation.TimedAnimation):
 
         #We are going to use a common time axis
         fig, axes = plt.subplots(len(self.livefeed.cur_data), 1, sharex=True,
-                                 squeeze=False)
+                                 squeeze=False,
+                                 figsize=(12, 3*len(self.livefeed.cur_data)))
         cspace = colorspace(len(axes))[0]
         from collections import deque
         for isense, sensor in enumerate(self._plotorder):
@@ -64,15 +69,17 @@ class Plotter(animation.TimedAnimation):
             axes[isense,0].set_ylabel(sensor)
             line = Line2D([], [], color=cspace[isense])
             axes[isense,0].add_line(line)
+            axes[isense,0].set_xlim((0, 22.5))
             self.lines[sensor] = line
             self.ts[sensor] = deque(maxlen=self.maxlen)
             self.ys[sensor] = deque(maxlen=self.maxlen)
+            self.axes[sensor] = axes[isense, 0]
 
         from os import name
         if name != "nt":
             animation.TimedAnimation.__init__(self, fig, blit=False)
         else:
-            super(Plotter, self).__init__(self, fig, blit=True)
+            animation.TimedAnimation.__init__(self, fig, blit=True)
         msg.info("Plotting animation configured.", 2)
 
     def new_frame_seq(self):
@@ -87,7 +94,9 @@ class Plotter(animation.TimedAnimation):
             self.ts[sensor].append(t)
             self.ys[sensor].append(y)
             self.lines[sensor].set_data(self.ts[sensor], self.ys[sensor])
-
+            if t > 20:
+                self.axes[sensor].set_xlim((self.ts[sensor][0], t + 2.5))
+            
         self._drawn_artists = [self.lines[s] for s in self._plotorder]
         
     def _init_draw(self):

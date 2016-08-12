@@ -18,7 +18,8 @@ class Logger(object):
           then data will *not* be logged to disk.
         logfreq (int): how often (in seconds) to write the accumulated data points
           to CSV.
-
+        plotting (bool): when False, the values being read off will be printed if
+          logging is not enabled.
     Attributes:
         timer (threading.Timer) executes calls to the serial port reader to get the
           latest data and push it to the live feed.    
@@ -28,7 +29,8 @@ class Logger(object):
           identifier.
     """
     def __init__(self, interval, dataq, errorq, livefeed,
-                 method="last", logdir=None, logfreq=10):
+                 method="last", logdir=None, logfreq=10,
+                 plotting=False):
         
         self.interval = interval
         self.dataq = dataq
@@ -39,6 +41,7 @@ class Logger(object):
         self.logfreq = logfreq
         self.lastsave = None
         self.csvdata = {}
+        self.plotting = plotting
         self.timer = None
         self._timer_calls = 0
         """Number of times that the timer has executed during the application
@@ -113,7 +116,7 @@ class Logger(object):
                     if sensor not in self.csvdata:
                         self.csvdata[sensor] = []
                     self.csvdata[sensor].append(data)
-                else:
+                elif not self.plotting:
                     print("{0: <20f}  {1: <20f}".format(*data))
 
             #Before we restart the timer again, see if we need to save the data to

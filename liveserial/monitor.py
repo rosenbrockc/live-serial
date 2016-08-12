@@ -84,7 +84,6 @@ class ComMonitorThread(threading.Thread):
 
         from time import time
         start = time()
-        sensor = "W"
         lastlisten = None
         while self.alive.isSet():
             line = self.serial_port.readline()
@@ -95,10 +94,11 @@ class ComMonitorThread(threading.Thread):
                 continue
                     
             raw = line.split()
-            if len(raw) == 2:
+            if len(raw) == 3:
                 timestamp = time() - start
+                sensor = raw[0]
                 try:
-                    qdata = float(raw[1])
+                    qdata = float(raw[2])
                     self.data_q.put((sensor, timestamp, qdata))
                 except ValueError:
                     # There must have been a communication glitch; just ignore
