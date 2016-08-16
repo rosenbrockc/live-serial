@@ -7,3 +7,4 @@ termcolor
 numpy
 matplotlib
 pyserial
+tox
