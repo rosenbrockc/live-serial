@@ -1,11 +1,17 @@
+sudo: true
+addons:
+    apt:
+        packages:
+            - socat
 language: python
 python:
   - "2.7"
-  - "3.4"
+  - "3.5"
 # command to install dependencies
 install:
   - pip install .
   - pip install -r requirements.txt
 # command to run tests
+before_script: sudo socat -d -d -d -d -lf /tmp/socat pty,link=/dev/tty.lscom-w,raw,echo=0,user=$USER pty,link=/dev/tty.lscom-r,raw,echo=0,user=$USER
 script: tox
 after_success: coveralls

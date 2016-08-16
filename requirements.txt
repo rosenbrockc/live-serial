@@ -1,10 +1,9 @@
 argparse
-coveralls
+coverage
+python-coveralls
 pypandoc
 pytest
 termcolor
 numpy
-pandas
-tqdm
 matplotlib
 pyserial
