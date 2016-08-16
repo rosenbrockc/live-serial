@@ -3,7 +3,7 @@
 # `live-serial`: real-time serial port plotter/logger
 
 `live-serial` is a simple package that ties `pyserial`, `matplotlib` and
-`pandas` together to create a real-time plotter and logger of serial port
+`csv` together to create a real-time plotter and logger of serial port
 data. This is intended to make life easier for people who work with sensors who
 need to see real-time feedback when they interact with the sensors.
 
@@ -36,3 +36,7 @@ livemon.py /dev/ttyACM0 -logdir ~/sensordata
 
 for linux or MacOS. To see a full list of examples and command-line arguments,
 type `livemon.py -examples`.
+
+## API Documentation
+
+Full API documentation is hosted at [github pages](https://rosenbrockc.github.io/liveserial/).
