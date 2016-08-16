@@ -3,7 +3,7 @@ addons:
     apt:
         packages:
             - socat
-	    - pandoc
+            - pandoc
 language: python
 cache: pip
 python:
