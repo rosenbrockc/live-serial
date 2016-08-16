@@ -3,15 +3,17 @@ addons:
     apt:
         packages:
             - socat
+	    - pandoc
 language: python
+cache: pip
 python:
   - "2.7"
   - "3.5"
 # command to install dependencies
 install:
-  - pip install .
-  - pip install -r requirements.txt
-  - pip install tox-travis
+  - pip install --upgrade .
+  - pip install --upgrade -r requirements.txt
+  - pip install --upgrade tox-travis
 # command to run tests
 before_script: sudo socat -d -d -d -d -lf /tmp/socat pty,link=/dev/tty.lscom-w,raw,echo=0,user=$USER pty,link=/dev/tty.lscom-r,raw,echo=0,user=$USER &
 script: tox
