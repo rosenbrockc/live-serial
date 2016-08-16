@@ -1,11 +1,13 @@
 """Methods for plotting the real-time data feed.
 """
+from liveserial.base import testmode
 from matplotlib import cm
 import matplotlib.animation as animation
 import matplotlib
-matplotlib.use('TkAgg')
+matplotlib.use("Agg" if testmode else "TkAgg")
 from liveserial import msg
 import numpy as np
+from threading import Timer
 
 def colorspace(size, cmap=cm.rainbow):
     """Returns an cycler over a linear color space with 'size' entries.
@@ -28,6 +30,9 @@ class Plotter(animation.TimedAnimation):
         interval (int): how often (in milliseconds) to redraw the plot with the
           latest plot values.
         maxlen (int): maximum number of time points kept for each subplot.    
+        window (float): width of the plot window for sensors.
+        testmode (bool): when True, the animator is not initialized so that a
+          backend isn't required to run the unit tests.
         plotargs (dict): arguments that get passed through directly to the
           `matplotlib` plotting function.
 
@@ -38,11 +43,15 @@ class Plotter(animation.TimedAnimation):
           serial data; keyed by the sensor identifiers.
         ts (dict): of lists of the last `maxlen` sensor timestamp readings.
         ys (dict): of lists of the last `maxlen` sensor value readings.
+
     """
-    def __init__(self, livefeed, interval, maxlen=100, **plotargs):
+    def __init__(self, livefeed, interval, maxlen=100, window=20,
+                 testmode=False, **plotargs):
         self.livefeed = livefeed
         self.interval = interval
         self.maxlen = maxlen
+        self.window = window
+        self.testmode = testmode
         self.plotargs = plotargs
         self.lines = {}
         self.axes = {}
@@ -76,10 +85,20 @@ class Plotter(animation.TimedAnimation):
             self.axes[sensor] = axes[isense, 0]
 
         from os import name
-        if name != "nt":
-            animation.TimedAnimation.__init__(self, fig, blit=False)
+        if not self.testmode: # pragma: no test
+            if name != "nt":
+                #Mac doesn't support blitting yet with its backends, so we have to
+                #do the costly redraw at every iteration.
+                animation.TimedAnimation.__init__(self, fig, blit=False)
+            else:
+                animation.TimedAnimation.__init__(self, fig, blit=True)
         else:
-            animation.TimedAnimation.__init__(self, fig, blit=True)
+            print("Configuring timer at ", interval)
+            self._init_draw()
+            self.new_frame_seq()
+            self._timer = Timer(self.interval, self._draw_frame, (0,))
+            self._timer.start()
+            
         msg.info("Plotting animation configured.", 2)
 
     def new_frame_seq(self):
@@ -94,12 +113,21 @@ class Plotter(animation.TimedAnimation):
             self.ts[sensor].append(t)
             self.ys[sensor].append(y)
             self.lines[sensor].set_data(self.ts[sensor], self.ys[sensor])
-            if t > 20:
+            if t > self.window:
                 self.axes[sensor].set_xlim((self.ts[sensor][0], t + 2.5))
             
         self._drawn_artists = [self.lines[s] for s in self._plotorder]
+        if self.testmode:
+            self._timer = Timer(self.interval, self._draw_frame, (0,))
+            self._timer.start()
         
     def _init_draw(self):
         """Initializes all the subplot line objects to be empty."""
         for l in self.lines.values():
             l.set_data([], [])
+
+    def stop(self):
+        """Cleans up the timer when the plotter is running in test mode.
+        """
+        if self._timer:
+            self._timer.cancel()

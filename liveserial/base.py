@@ -49,3 +49,12 @@ def _common_parser():
     return parser
 
 bparser = _common_parser()
+testmode = False
+"""bool: when True, the package is operating in unit test mode, which changes
+how plotting is handled.
+"""
+def set_testmode(testing):
+    """Sets the package testing mode.
+    """
+    global testmode
+    testmode = testing

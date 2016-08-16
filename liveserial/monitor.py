@@ -3,21 +3,26 @@ that the main UI thread is not blocked or slowed. Code adapted from
 https://github.com/mba7/SerialPort-RealTime-Data-Plotter/blob/master/com_monitor.py
 """
 import threading, serial
-import Queue
+try:
+    from Queue import Empty
+except ImportError:
+    #Why couldn't they have called it queue from the start in py2?
+    from queue import Empty
+    
 from liveserial import msg
 class ComMonitorThread(threading.Thread):
     """ A thread for monitoring a COM port. The COM port is 
         opened when the thread is started.
     
     Args:
-        data_q (Queue.Queue):
+        data_q (multiprocessing.Queue):
             Queue for received data. Items in the queue are
             (data, timestamp) pairs, where data is a binary 
             string representing the received data, and timestamp
             is the time elapsed from the thread's start (in 
             seconds).
         
-        error_q (Queue.Queue):
+        error_q (multiprocessing.Queue):
             Queue for error messages. In particular, if the 
             serial port fails to open for some reason, an error
             is placed into this queue.
@@ -78,7 +83,7 @@ class ComMonitorThread(threading.Thread):
                 self.serial_port.close()
             self.serial_port = serial.Serial(**self.serial_arg)
             msg.info("Serial port communication enabled.", 2)
-        except serial.SerialException, e:
+        except serial.SerialException as e:
             self.error_q.put(e.message)
             return
 
@@ -157,7 +162,7 @@ def get_all_from_queue(Q):
     try:
         while True:
             yield Q.get_nowait()
-    except Queue.Empty:
+    except Empty:
         raise StopIteration
 
 def get_item_from_queue(Q, timeout=0.01):
@@ -165,15 +170,15 @@ def get_item_from_queue(Q, timeout=0.01):
         empty, None is returned.
 
     Args:
-    Q (Queue.Queue): queue to get an item from.
-    timeout (float):
-        Blocks for 'timeout' seconds in case the queue is empty,
-        so don't use this method for speedy retrieval of multiple
-        items (use get_all_from_queue for that).
+        Q (Queue.Queue): queue to get an item from.
+        timeout (float):
+            Blocks for 'timeout' seconds in case the queue is empty,
+            so don't use this method for speedy retrieval of multiple
+            items (use get_all_from_queue for that).
     """
     try: 
         item = Q.get(True, 0.01)
-    except Queue.Empty: 
+    except Empty: 
         return None
     return item
 
@@ -182,10 +187,10 @@ class LiveDataFeed(object):
     recent data and find out whether it was updated since the last read.
 
     Attributes:
-    has_new_data (dict): A boolean attribute telling the reader whether the
-      data was updated since the last read; keyed by sensor identifier.
-    cur_data (dict): most recent data point placed on the feed; keyed by the
-      sensor identifier.
+        has_new_data (dict): A boolean attribute telling the reader whether the
+          data was updated since the last read; keyed by sensor identifier.
+        cur_data (dict): most recent data point placed on the feed; keyed by the
+          sensor identifier.
     """
     def __init__(self):
         self.cur_data = {}

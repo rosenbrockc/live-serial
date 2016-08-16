@@ -18,7 +18,7 @@ class ComSimulatorThread(threading.Thread):
         alive (threading.Event): event for asynchronously handling the reads from
           the serial port.
     """
-    def __init__(self, port="com1", sensors=["W", "K", "R"], dataform=(int, float),
+    def __init__(self, port="lscom-w", sensors=["W", "K", "R"], dataform=(int, float),
                  seed=42):
         threading.Thread.__init__(self)
         self.dataform = dataform
@@ -54,8 +54,10 @@ class ComSimulatorThread(threading.Thread):
                 elif t is float:
                     raw.append(random.randint(-1, 1) + random.random())
 
-            data = ' '.join([str(d) for d in raw])
-            x = self.serial.write(data + '\n')
+            data = ' '.join([str(d) for d in raw]) + '\n'
+            #Usually people encode with UTF-8. However, we know that our data is
+            #really simple and ASCII takes less space.
+            x = self.serial.write(data.encode("ascii"))
             time.sleep(0.0025)
 
         if self.serial:
@@ -76,7 +78,10 @@ class ComSimulatorThread(threading.Thread):
             self.serial.flushOutput()
         threading.Thread.join(self, timeout)
 
-if __name__ == '__main__':
+if __name__ == '__main__': # pragma: no cover
+    #We skip the unit tests for this section because it is short and clear
+    #and just calls methods that are being tested elsewhere.
+    
     #This module is intended mainly to be imported and used by the unit
     #tests. However, it can also be run directly, in which case we just simulate
     #some data.

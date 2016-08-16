@@ -16,7 +16,7 @@ def examples():
                 (("Plot *and* log the data from /dev/tty."),
                  "livemon.py /dev/tty -logdir ~/sensordata", ""),
                 ("Log the data, but don't generate a live plot.",
-                 "livemon.py COM3 -noplot", ""),
+                 "livemon.py COM3 -noplot -logdir C:\\sensordata\\", ""),
                 ("List the available serial ports on the system.",
                  "livemon.py list", "")]
     required = ("REQUIRED: working serial port.")
@@ -82,7 +82,7 @@ def _parser_options():
     parser.add_argument("-logfreq", type=float, default=10,
                         help=("How often (in *seconds*) to save the buffered "
                               "data points to CSV."))
-    parser.add_argument("-method", default="average",
+    parser.add_argument("-method", default="average", choices=["last", "average"],
                         help=("Specifies how buffered data is aggregated each "
                               "time it is read from the serial port."))
     parser.add_argument("-listen", action="store_true",
@@ -93,23 +93,30 @@ def _parser_options():
                         help=("Specifies that the port being connected to is "
                               "virtual (e.g., with `socat`), which changes the "
                               "parameters for connection."))
+    parser.add_argument("-sensors", nargs="+", default="all",
+                        help="Filter the list of sensors being logged/plotted.")
+    parser.add_argument("-maxpts", type=int, default=100,
+                        help=("Maximum number of values to keep in the plot "
+                              "for each sensor"))
+    parser.add_argument("-window", type=float, default=20.,
+                        help="Width of window in time units.")
     args = base.exhandler(examples, parser)
 
     if args["port"] == "list":
         msg.okay("Available Serial Ports")
         for port in _list_serial():
             msg.info("  {}".format(port))
-        exit(0)
+        return None
     else:
         if not _list_serial(args["port"]):
             msg.err("Port '{}' is not valid.".format(args["port"]))
-            exit(0)
+            return None
 
     #Convert the units for the buffer and refresh times.
     args["refresh"] /= 1000.
     args["buffertime"] /= 1000.
     
-    if args["noplot"] and not args["logdir"]:
+    if args["noplot"] and not args["logdir"]: # pragma: no cover
         msg.warn("Data will only be logged if `-logdir` is specified.", -1)
 
     return args
@@ -118,7 +125,7 @@ def _get_com(args):
     """Gets a configured COM port for serial communication.
     """
     from liveserial.monitor import ComMonitorThread
-    from Queue import Queue
+    from multiprocessing import Queue
     msg.info("Starting monitoring of port '{}'.".format(args["port"]), 2)
     dataq, errorq = Queue(), Queue()
     com = ComMonitorThread(dataq, errorq, args["port"], args["baudrate"],
@@ -143,12 +150,25 @@ def _com_start(com):
         msg.err("monitor thread error--{}".format(com_error))
         com = None
     
-def run(args):
+def run(args, runtime=None, testmode=False):
     """Starts monitoring of the serial data in a separate thread. Starts the
     plotting or logging based on command-line args.
+
+    Args:
+        runtime (float): how many seconds to run for before terminating.
+        vardir (dict): to get access to the COM port, logger, feed and plotter
+          objects.
     """
+    from liveserial.base import set_testmode
+    set_testmode(testmode)    
+    #When args is None, it means that examples or help or equivalent wants to
+    #cancel the execution of the script.
+    if args is None:
+        return
+    
     #Get the serial port for communications; this also tests that we are getting
     #data.
+    vardir = {}
     com = _get_com(args)
 
     #The data feed keeps track of the latest, aggregated data selected from the
@@ -177,6 +197,13 @@ def run(args):
         #it still let the application hang.
     signal.signal(signal.SIGINT, exit_handler)
 
+    #Add the local variables to the dictionary. This dict is passed in by unit
+    #tests usually, which want to investigate the values in each object.
+    if vardir is not None:
+        vardir["feed"] = feed
+        vardir["com"] = com
+        vardir["logger"] = logger
+        
     #Now that we actually have a way to quit the infinite loop, we can start the
     #data acquisition process.
     _com_start(com)
@@ -190,16 +217,31 @@ def run(args):
     
     #The plotter looks at the live feed data to plot the latest aggregated
     #points.
+    plotter = None
     if not args["noplot"] and not args["listen"]:
         while not logger.ready():
             pass
         from liveserial.plotting import Plotter
         import matplotlib.pyplot as plt
-        plotter = Plotter(feed, args["refresh"])
-        plt.show()
-        
+        plotter = Plotter(feed, args["refresh"], args["maxpts"],
+                          args["window"], testmode)
+        if vardir is not None:
+            vardir["plotter"] = plotter
+        if not testmode: # pragma: no test
+            plt.show()
+
+    _runtime = 0
     while com.is_alive():
         com.join(1, terminate=False)
+        _runtime += 1
+        if runtime is not None:
+            if _runtime >= runtime:
+                com.join(1)
+                logger.stop()
+                if plotter is not None:
+                    plotter.stop()
+
+    return vardir
         
-if __name__ == '__main__':
+if __name__ == '__main__': # pragma: no cover
     run(_parser_options())
