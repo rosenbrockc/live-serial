@@ -23,7 +23,7 @@ def exhandler(function, parser):
     args = vars(bparser.parse_known_args()[0])
     if args["examples"]:
         function()
-        exit(0)
+        return
     if args["verbose"]:
         from msg import set_verbosity
         set_verbosity(args["verbose"])

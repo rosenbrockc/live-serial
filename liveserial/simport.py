@@ -24,7 +24,7 @@ class ComSimulatorThread(threading.Thread):
         self.dataform = dataform
         self.sensors = sensors
         from os import name
-        if name  == 'nt':
+        if name  == 'nt': # pragma: no cover
             self.port = port
         else:
             self.port = "/dev/tty.{}".format(port)

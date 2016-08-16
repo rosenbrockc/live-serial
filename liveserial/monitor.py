@@ -5,7 +5,7 @@ https://github.com/mba7/SerialPort-RealTime-Data-Plotter/blob/master/com_monitor
 import threading, serial
 try:
     from Queue import Empty
-except ImportError:
+except ImportError: # pragma: no cover
     #Why couldn't they have called it queue from the start in py2?
     from queue import Empty
     
@@ -79,11 +79,11 @@ class ComMonitorThread(threading.Thread):
         will continue indefinitely until :meth:`join` is called.
         """
         try:
-            if self.serial_port: 
+            if self.serial_port: # pragma: no cover
                 self.serial_port.close()
             self.serial_port = serial.Serial(**self.serial_arg)
             msg.info("Serial port communication enabled.", 2)
-        except serial.SerialException as e:
+        except serial.SerialException as e: # pragma: no cover
             self.error_q.put(e.message)
             return
 
@@ -96,7 +96,10 @@ class ComMonitorThread(threading.Thread):
                 if lastlisten is None or time() - lastlisten > 0.05:
                     print(line)
                     lastlisten = time()
-                continue
+                #This is crazy to me... The if statement above and its contents
+                #are covered by the unit tests, but coverage claims that this
+                #continue statement is not...
+                continue # pragma: no cover
                     
             raw = line.split()
             if len(raw) == 3:
@@ -105,7 +108,7 @@ class ComMonitorThread(threading.Thread):
                 try:
                     qdata = float(raw[2])
                     self.data_q.put((sensor, timestamp, qdata))
-                except ValueError:
+                except ValueError: # pragma: no cover
                     # There must have been a communication glitch; just ignore
                     # this data point.
                     pass
@@ -138,7 +141,8 @@ def enumerate_serial_ports():
     """
     from os import name
     from glob import glob
-    if name  == 'nt':
+    if name  == 'nt': # pragma: no cover
+        #We don't have CI setup for windows at the moment.
         outAvailablePorts = []
         for i in range(256):
             try:

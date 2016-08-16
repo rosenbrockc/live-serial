@@ -131,7 +131,9 @@ class Logger(object):
         from os import path
         import csv
         for sensor in self.csvdata:
-            if self.logdir is None:
+            if self.logdir is None: # pragma: no cover
+                #This should never fire because of checks further up the chain.
+                #it is here as as sanity check to keep the file system clean.
                 continue
             logpath = path.join(self.logdir, "{}.csv".format(sensor))
             if not path.isfile(logpath):

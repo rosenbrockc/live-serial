@@ -101,6 +101,8 @@ def _parser_options():
     parser.add_argument("-window", type=float, default=20.,
                         help="Width of window in time units.")
     args = base.exhandler(examples, parser)
+    if args is None:
+        return
 
     if args["port"] == "list":
         msg.okay("Available Serial Ports")
@@ -143,10 +145,10 @@ def _com_start(com):
     #Even though the thread is going, it doesn't mean that everything is working
     #the way we hope. Check the first item. We have to sleep to give it time to
     #initialize.
-    from time import sleep
-    sleep(0.05)    
+    com.join(0.05, terminate=False)
     com_error = get_item_from_queue(com.error_q)
-    if com_error is not None:
+    if com_error is not None: # pragma: no cover
+        #We can't easily simulate failure on the serial port to test this message.
         msg.err("monitor thread error--{}".format(com_error))
         com = None
     
@@ -163,13 +165,15 @@ def run(args, runtime=None, testmode=False):
     set_testmode(testmode)    
     #When args is None, it means that examples or help or equivalent wants to
     #cancel the execution of the script.
-    if args is None:
+    if args is None: # pragma: no cover
         return
     
     #Get the serial port for communications; this also tests that we are getting
     #data.
     vardir = {}
     com = _get_com(args)
+    if com is None: # pragma: no cover
+        return
 
     #The data feed keeps track of the latest, aggregated data selected from the
     #buffer in the com thread.
@@ -181,15 +185,15 @@ def run(args, runtime=None, testmode=False):
     from liveserial.logging import Logger
     logger = Logger(args["buffertime"], com.data_q, com.error_q, feed,
                     args["method"], args["logdir"], args["logfreq"],
-                    not args["noplot"])
+                    not (not args["noplot"] and not args["listen"]))
     
     import signal
-    def exit_handler(signal, frame):
+    def exit_handler(signal, frame): # pragma: no cover
         """Cleans up the serial communication and logging.
         """
         msg.warn("SIGINT >> cleaning up threads.", -1)
-        com.join()
         logger.stop()
+        com.join()
         print("")
         exit(0)
         #Matplotlib's cleanup code for animations is lousy--it doesn't
@@ -211,7 +215,9 @@ def run(args, runtime=None, testmode=False):
     #Wait until we have some data before the logger gets put to work with it.
     if not args["listen"]:
         from time import sleep
-        while com.data_q.empty():
+        while com.data_q.empty(): # pragma: no cover
+            #If we don't need this delay, it shouldn't trigger unit test
+            #problems.
             sleep(0.05)
         logger.start()
     
@@ -227,7 +233,7 @@ def run(args, runtime=None, testmode=False):
                           args["window"], testmode)
         if vardir is not None:
             vardir["plotter"] = plotter
-        if not testmode: # pragma: no test
+        if not testmode: # pragma: no cover
             plt.show()
 
     _runtime = 0
@@ -236,8 +242,8 @@ def run(args, runtime=None, testmode=False):
         _runtime += 1
         if runtime is not None:
             if _runtime >= runtime:
-                com.join(1)
                 logger.stop()
+                com.join(1)
                 if plotter is not None:
                     plotter.stop()
 

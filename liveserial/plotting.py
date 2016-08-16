@@ -85,7 +85,7 @@ class Plotter(animation.TimedAnimation):
             self.axes[sensor] = axes[isense, 0]
 
         from os import name
-        if not self.testmode: # pragma: no test
+        if not self.testmode: # pragma: no cover
             if name != "nt":
                 #Mac doesn't support blitting yet with its backends, so we have to
                 #do the costly redraw at every iteration.
@@ -93,7 +93,6 @@ class Plotter(animation.TimedAnimation):
             else:
                 animation.TimedAnimation.__init__(self, fig, blit=True)
         else:
-            print("Configuring timer at ", interval)
             self._init_draw()
             self.new_frame_seq()
             self._timer = Timer(self.interval, self._draw_frame, (0,))
@@ -113,7 +112,9 @@ class Plotter(animation.TimedAnimation):
             self.ts[sensor].append(t)
             self.ys[sensor].append(y)
             self.lines[sensor].set_data(self.ts[sensor], self.ys[sensor])
-            if t > self.window:
+            if t > self.window: # pragma: no cover
+                # We don't want the tests to run long enough for this window to
+                # kick in (at least for the moment).
                 self.axes[sensor].set_xlim((self.ts[sensor][0], t + 2.5))
             
         self._drawn_artists = [self.lines[s] for s in self._plotorder]

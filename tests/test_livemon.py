@@ -11,6 +11,12 @@ def _get_sargs(args):
     from liveserial.livemon import _parser_options
     return _parser_options()    
 
+def test_examples():
+    """Makes sure the script examples work properly.
+    """
+    argv = ["py.test", "-examples"]
+    _get_sargs(argv)
+    
 def test_list(isnt):
     """Tests the port listing function of the package.
     """
@@ -21,6 +27,10 @@ def test_list(isnt):
         assert _list_serial("/dev/tty.lscom-w")
     assert "/dev/tty.lscom-r" in allports
 
+    #Also, make sure that if the port isn't in the list, we exit gracefully.
+    argv = ["py.test", "bogus-port"]
+    assert _get_sargs(argv) is None
+    
     #Finally, just check that the printing functionality of the entry script
     #works as expected. Here we are just betting against unhandled exceptions.
     argv = ["py.test", "list"]
@@ -116,8 +126,42 @@ def test_plotting():
     assert "feed" in vardir
     assert len(vardir["plotter"].ts) == len(vardir["feed"].cur_data)
     assert len(vardir["plotter"].ys) == len(vardir["feed"].cur_data)
-    print(vardir["feed"].cur_data)
-    print(vardir["plotter"].ts)
+    assert all([len(q) > 0
+                for q in vardir["plotter"].ts.values()])
+    assert all([len(q) > 0
+                for q in vardir["plotter"].ys.values()])    
+
+def test_logplot(tmpdir):
+    """Tests the logging and plotting running simultaneously.
+    """
+    #For this test, we only use the averaging method (which is the default).
+    sub = tmpdir.mkdir("combined")
+    argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-logdir", str(sub),
+            "-logfreq", "1.5"]
+    args = _get_sargs(argv)
+    
+    from liveserial.livemon import run
+    vardir = run(args, 4, True)
+    #This is the one place where we make sure getting a single item works.
+    from liveserial.monitor import get_item_from_queue
+    assert get_item_from_queue(vardir["com"].data_q) is not None
+    assert "logger" in vardir
+    assert "com" in vardir
+    
+    nfiles = 0
+    for sfile in sub.listdir():
+        #The size of the file is in bytes. The header is at least 11 and
+        #each line should be around 30 (depending on encoding). We expect
+        #lots of lines from 3 seconds worth of logging.
+        assert sfile.stat().size > 120
+        nfiles += 1
+        
+    #Also make sure that we have a file for every sensor.
+    assert nfiles == len(vardir["logger"].csvdata)
+    assert "plotter" in vardir
+    assert "feed" in vardir
+    assert len(vardir["plotter"].ts) == len(vardir["feed"].cur_data)
+    assert len(vardir["plotter"].ys) == len(vardir["feed"].cur_data)
     assert all([len(q) > 0
                 for q in vardir["plotter"].ts.values()])
     assert all([len(q) > 0
