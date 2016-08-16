@@ -1,4 +1,4 @@
-[![Coverage Status](https://coveralls.io/repos/github/rosenbrockc/live-serial/badge.svg?branch=master)](https://coveralls.io/github/rosenbrockc/live-serial?branch=master)
+[![Build Status](https://travis-ci.org/rosenbrockc/live-serial.svg?branch=master)](https://travis-ci.org/rosenbrockc/live-serial) [![Coverage Status](https://coveralls.io/repos/github/rosenbrockc/live-serial/badge.svg?branch=master)](https://coveralls.io/github/rosenbrockc/live-serial?branch=master) [![PyPI](https://img.shields.io/pypi/v/live-serial.svg)](https://pypi.python.org/pypi/live-serial/)
 
 # `live-serial`: real-time serial port plotter/logger
 
