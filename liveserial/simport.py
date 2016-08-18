@@ -8,8 +8,9 @@ class ComSimulatorThread(threading.Thread):
 
     Args:
         port (str): name of the simulated port to write to.
-        dataform (tuple): of `type` that specifies how a row of simulated data will
-          look when written to the COM port.
+        dataform (dict): keys are sensor ids; values are tuples of `type` that
+          specifies how a row of simulated data will look when written to the COM
+          port.
         sensors (list): of `str` giving sensor ids for which data will be randomly
           generated with equal probability between each sensor.
         seed (int): random seed so the values are predictable.
@@ -18,10 +19,11 @@ class ComSimulatorThread(threading.Thread):
         alive (threading.Event): event for asynchronously handling the reads from
           the serial port.
     """
-    def __init__(self, port="lscom-w", sensors=["W", "K", "R"], dataform=(int, float),
+    def __init__(self, port="lscom-w", sensors=["W", None, "K"],
+                 dataform=[(int, float), (float, float), (int, float)],
                  seed=42):
         threading.Thread.__init__(self)
-        self.dataform = dataform
+        self.dataform = {s: d for s, d in zip(sensors, dataform)}
         self.sensors = sensors
         from os import name
         if name  == 'nt': # pragma: no cover
@@ -47,8 +49,12 @@ class ComSimulatorThread(threading.Thread):
             #Choose one of the sensors at random to generate data for.
             randsense = int(len(self.sensors)*random.random())
             sensor = self.sensors[randsense]
-            raw = [sensor]
-            for t in self.dataform:
+            if sensor is not None:
+                raw = [sensor]
+            else:
+                raw = []
+                
+            for t in self.dataform[sensor]:
                 if t is int:
                     raw.append(random.randint(0, 100))
                 elif t is float:
