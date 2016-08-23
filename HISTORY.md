@@ -1,5 +1,11 @@
 # `live-serial` Revision History
 
+## Revision 0.1.0
+
+- Added support for multiple ports, with multiple sensors on each port.
+- Added configuration file support: sensors and ports can have their parameters, labels and CSV output format specified in a configuration `.ini`-formatted file.
+- Full unit-testing support and coverage for the multi-port case.
+
 ## Revision 0.0.2
 
 - Added the classes for monitoring the serial port in a separate thread,
