@@ -15,6 +15,8 @@ install:
   - pip install --upgrade -r requirements.txt
   - pip install --upgrade tox-travis
 # command to run tests
-before_script: sudo socat -d -d -d -d -lf /tmp/socat pty,link=/dev/tty.lscom-w,raw,echo=0,user=$USER pty,link=/dev/tty.lscom-r,raw,echo=0,user=$USER &
+before_script:
+  - sudo socat -d -d -d -d -lf /tmp/socat pty,link=/dev/tty.lscom-w,raw,echo=0,user=$USER pty,link=/dev/tty.lscom-r,raw,echo=0,user=$USER &
+  - sudo socat -d -d -d -d -lf /tmp/socat pty,link=/dev/tty.lscom-mw,raw,echo=0,user=$USER pty,link=/dev/tty.lscom-mr,raw,echo=0,user=$USER &
 script: tox
 after_success: coveralls
