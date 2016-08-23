@@ -65,7 +65,7 @@ class Logger(object):
         if config is not None:
             try:
                 from configparser import ConfigParser
-            except ImportError:
+            except ImportError: # pragma: no cover
                 #Renaming of modules to lower case in python 3.
                 from ConfigParser import ConfigParser
 
@@ -142,7 +142,7 @@ class Logger(object):
             self.timer.start()
 
     def stop(self):
-        """Stops the automatic collection and logging of data.
+        """Stops the automatic collection and logging of data. Cleans up threads.
         """
         self._cancel = True
         if self.timer is not None:

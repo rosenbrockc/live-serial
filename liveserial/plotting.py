@@ -9,7 +9,7 @@ from liveserial import msg
 import numpy as np
 from threading import Timer
 
-def colorspace(size, cmap=cm.rainbow):
+def colorspace(size, cmap=cm.winter):
     """Returns an cycler over a linear color space with 'size' entries.
     
     :arg int size: the number of colors to define in the space.
@@ -33,7 +33,7 @@ class Plotter(animation.TimedAnimation):
         window (float): width of the plot window for sensors.
         testmode (bool): when True, the animator is not initialized so that a
           backend isn't required to run the unit tests.
-        logger (logging.Logger): logger instance for interacting with config
+        logger (log.Logger): logger instance for interacting with config
           parameters.
         plotargs (dict): arguments that get passed through directly to the
           `matplotlib` plotting function.
@@ -63,6 +63,9 @@ class Plotter(animation.TimedAnimation):
         self._plotorder = []
         """Sensor keys, ordered alphabetically; this is the order in which the
         subplots show up in the figure.
+        """
+        self._timer = None
+        """Timer for unit testing the plotting code data acquisition.
         """
         
         #Find out how many subplots we will need; sort their keys for plotting.

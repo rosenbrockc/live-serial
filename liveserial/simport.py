@@ -1,105 +1,152 @@
 """Module that sets up a virtual serial port for unit testing.
 """
-import threading
 from liveserial import msg
-class ComSimulatorThread(threading.Thread):
-    """Simulates a sine wave, masquerading as a separate COM port on the machine so
-    that we can unit test the code against it.
+def examples():
+    """Prints examples of using the script to the console using colored output.
+    """
+    script = "LIVE-SERIAL Virtual Serial Port Writer"
+    explain = ("For testing the plotting and logging locally, it is useful to "
+               "have virtual serial ports started on the local machine so "
+               "that code can be tested without the real devices. This "
+               "script creates threads that write to virtual ports.")
+    contents = [(("Write 2 sensors to '/dev/tty.lscom-w' with formats `int`,"
+                  "`float` and `int`,`int."), 
+                 ("simport.py lscom-w -sensors K W -dtype K int float "
+                  "W int int"),
+                 ("Use '-seed' to change the random seed for the generated "
+                  "values. ")),
+                (("Write 2 sensor values to '/dev/tty.lscom-w' and "
+                  "'/dev/tty.lscom-mw' simultaneously. Use default `int',"
+                  "`float` data types for all but sensor `P`."),
+                 ("simport.py lscom-w lscom-mw -sensors lscom-w K W "
+                  "lscom-mw P S -dtype P float float"),
+                 ("`None` can be used as a sensor name, in which case "
+                  "a sensor without a key will be written to the stream."))]
+    required = ("REQUIRED: virtual serial ports with the given names.")
+    output = ("")
+    details = ("For unix-based OS, the name is automatically changed to "
+               "'/dev/tty.{}', where '{}' is the given name.")
+    outputfmt = ("")
+
+    msg.example(script, explain, contents, required, output, outputfmt, details)
+    
+def _parser_options():
+    """Parses the options and arguments from the command line."""
+    import argparse
+    from liveserial import base
+    parser = argparse.ArgumentParser(parents=[base.bparser],
+                                     description="Real-time serial port plotter/logger.")
+    parser.add_argument("ports", nargs="+",
+                        help="Name of the port(s) to write random data to.")
+    parser.add_argument("-sensors", nargs="+",
+                        help=("Specify the port names and sensor names to "
+                              "generate random data for. Format: "
+                              "`-sensor portname sensor_0 sensor_1 None`"))
+    parser.add_argument("-dtype", nargs="+",
+                        help=("Specify data types to write for each sensor "
+                              "type. Format: `-dtype sensor_0 int float`."))
+    parser.add_argument("-seed", type=int, default=42,
+                        help="Set the random seed for the generated data.")
+    args = base.exhandler(examples, parser)
+    if args is None:
+        return
+
+    #Verify that all the ports exist on the machine.
+    from liveserial.monitor import enumerate_serial_ports
+    from os import name
+    allports = enumerate_serial_ports()
+    failure = False
+    for port in args["ports"]:
+        if name != "nt":
+            portname = "/dev/tty.{}".format(port)
+        else:
+            portname = port
+            
+        if portname not in allports:
+            msg.err("port {} does not exist locally.".format(port))
+            failure = True
+            
+    if failure:
+        return None
+    
+    sensors = {k: [] for k in args["ports"]}
+    allsensors = []
+    if args["sensors"]:
+        current = args["ports"][0]
+        for sensor in args["sensors"]:
+            if sensor == "None":
+                sensor = None
+            allsensors.append(sensor)
+            if sensor in args["ports"]:
+                current = sensor
+            else:
+                sensors[current].append(sensor)
+    args["sensors"] = sensors
+
+    dtypes = {s: [] for s in allsensors}
+    if args["dtype"]:
+        current = None
+        for dtype in args["dtype"]:
+            if dtype in allsensors:
+                current = dtype
+            else:
+                dtypes[current].append(eval(dtype))
+        for s in allsensors:
+            if len(dtypes[s]) == 0:
+                dtypes[s] = [int, float]
+    args["dtype"] = dtypes
+                
+    return args
+
+def _setup_simulator(args, port):
+    """Sets up a simulator for the specified port.
+    """
+    from liveserial.simulator import ComSimulatorThread
+    sensors = args["sensors"][port]
+    dtypes = []
+    for s in sensors:
+        dtypes.append(tuple(args["dtype"][s]))
+    simsig = ComSimulatorThread(port, sensors, dtypes, args["seed"])
+    return simsig
+
+def run(args):
+    """Starts monitoring of the serial data in a separate thread. Starts the
+    plotting or logging based on command-line args.
 
     Args:
-        port (str): name of the simulated port to write to.
-        dataform (dict): keys are sensor ids; values are tuples of `type` that
-          specifies how a row of simulated data will look when written to the COM
-          port.
-        sensors (list): of `str` giving sensor ids for which data will be randomly
-          generated with equal probability between each sensor.
-        seed (int): random seed so the values are predictable.
-
-    Attributes:
-        alive (threading.Event): event for asynchronously handling the reads from
-          the serial port.
+        runtime (float): how many seconds to run for before terminating.
+        vardir (dict): to get access to the COM port, logger, feed and plotter
+          objects.
     """
-    def __init__(self, port="lscom-w", sensors=["W", None, "K"],
-                 dataform=[(int, float), (float, float), (int, float)],
-                 seed=42):
-        threading.Thread.__init__(self)
-        self.dataform = {s: d for s, d in zip(sensors, dataform)}
-        self.sensors = sensors
-        from os import name
-        if name  == 'nt': # pragma: no cover
-            self.port = port
-        else:
-            self.port = "/dev/tty.{}".format(port)
+    if args is None:
+        return
 
-        from serial import Serial
-        self.serial = Serial(self.port, 9600, dsrdtr=True, rtscts=True)
-        self.seed = seed
-        self.alive = threading.Event()
-        self.alive.set()
-        
-    def run(self):
-        """Starts simulating the communication.
-        """
-        import random, time, math
-        #Seed the random number generator so that it always produces the same
-        #values for the random variables.
-        random.seed(self.seed)
-        
-        while self.alive.isSet():
-            #Choose one of the sensors at random to generate data for.
-            randsense = int(len(self.sensors)*random.random())
-            sensor = self.sensors[randsense]
-            if sensor is not None:
-                raw = [sensor]
-            else:
-                raw = []
-                
-            for t in self.dataform[sensor]:
-                if t is int:
-                    raw.append(random.randint(0, 100))
-                elif t is float:
-                    raw.append(random.randint(-1, 1) + random.random())
+    simsigs = []
+    for port in args["ports"]:
+        simsigs.append(_setup_simulator(args, port))
 
-            data = ' '.join([str(d) for d in raw]) + '\n'
-            #Usually people encode with UTF-8. However, we know that our data is
-            #really simple and ASCII takes less space.
-            x = self.serial.write(data.encode("ascii"))
-            time.sleep(0.0025)
-
-        if self.serial:
-            self.serial.close()
-
-    def join(self, timeout=None, terminate=True):
-        """Tells the thread simulating the COM port to clean up and return.
-
-        Args:
-            timeout (float): number of seconds (or fractions of seconds) to wait
-              until returning. If `None`, then the operation will
-              block until the thread terminates. See also
-              :meth:`threading.Thread.join`.
-        """
-        if terminate:
-            self.alive.clear()
-            self.serial.cancel_write()
-            self.serial.flushOutput()
-        threading.Thread.join(self, timeout)
-
-if __name__ == '__main__': # pragma: no cover
-    #We skip the unit tests for this section because it is short and clear
-    #and just calls methods that are being tested elsewhere.
-    
-    #This module is intended mainly to be imported and used by the unit
-    #tests. However, it can also be run directly, in which case we just simulate
-    #some data.
-    simsig = ComSimulatorThread()
     import signal
     def exit_handler(signal, frame):
         """Cleans up the serial communication, plotting and logging.
         """
+        for simsig in simsigs:
+            simsig.join(1)
         print("")
-        simsig.join(1)
-        
+        exit(0)        
     signal.signal(signal.SIGINT, exit_handler)
-    simsig.start()
-    while simsig.is_alive():
-        simsig.join(1, terminate=False)
+
+    for simsig in simsigs:
+        simsig.start()
+
+    while all([sim.is_alive() for sim in simsigs]):
+        #Here is the tricky bit; we want to join the threads for a second to
+        #keep the main thread busy while everything is going on. More than a
+        #second causes delay when the user sends SIGINT to stop the whole
+        #process. We instead join on every thread for fractions of a second.
+        for simsig in simsigs:
+            simsig.join(1./len(simsigs), terminate=False)
+
+if __name__ == '__main__': # pragma: no cover
+    #We skip the unit tests for this section because it is short and clear
+    #and just calls methods that are being tested elsewhere.
+    run(_parser_options())

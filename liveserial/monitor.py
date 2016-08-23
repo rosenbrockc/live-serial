@@ -26,7 +26,7 @@ class Sensor(object):
 
     Args:
         monitor (ComMonitorThread): parent instance that this sensor is being logged
-        with.
+          with.
         name (str): name of the sensor in the configuration file.
         dtype (list): of `str` or `type`; items must belong to ['key', int, float,
           str]. Represents the order in which values are found in a single line of
@@ -34,7 +34,7 @@ class Sensor(object):
           ["key", int, float].
         label (str): for plots, what to put on the y-axis. Defaults to `name`.
         port (str): name of the port to read this sensor from. Defaults to
-          :ivar:`ComMonitorThread.port`.
+          :attr:`ComMonitorThread.port`.
         value_index (int): column index of the value that will be plotted.
     """
     def __init__(self, monitor, name, key=None, value_index=None,
@@ -115,7 +115,7 @@ class Sensor(object):
             raw (list): of split ASCII-encoded strings from the serial port. 
         
         Returns:
-            list: of values parsed using :ivar:`Sensor.dtype` casting.
+            list: of values parsed using :attr:`Sensor.dtype` casting.
             None: if the `key` was not found in the correct location.
         """
         result = None
@@ -326,13 +326,13 @@ class ComMonitorThread(threading.Thread):
         of the data.
 
         Args:
-        port (str):
-            The COM port to open. Must be recognized by the 
-            system.
-        
-        port_baud (int):
-            Rate at which information is transferred in a communication channel
-            (in bits/second).    
+            port (str):
+                The COM port to open. Must be recognized by the 
+                system.
+            
+            port_baud (int):
+                Rate at which information is transferred in a communication channel
+                (in bits/second).    
         """
         from multiprocessing import Queue
         dataq = Queue()
@@ -372,7 +372,7 @@ class ComMonitorThread(threading.Thread):
         if isinstance(config, str):
             try:
                 from configparser import ConfigParser
-            except ImportError:
+            except ImportError: # pragma: no cover
                 #Renaming of modules to lower case in python 3.
                 from ConfigParser import ConfigParser
                 
@@ -474,7 +474,7 @@ class ComMonitorThread(threading.Thread):
                 #continue statement is not...
                 continue # pragma: no cover
                     
-            raw = line.split()
+            raw = line.decode("ASCII").split()
             if len(raw) == 0: # pragma: no cover
                 #No data read from the stream.
                 continue
@@ -492,7 +492,7 @@ class ComMonitorThread(threading.Thread):
                 #We try to infer the structure of the data from the raw line.
                 if self.inferrer is not None:
                     vals, sensor = self.inferrer.parse(raw)
-
+                
             if vals is not None and len(vals) > 0:
                 if sensor is None:
                     #We use the id of the com thread (which corresponds

@@ -211,7 +211,7 @@ def run(args, runtime=None, testmode=False):
     #Logging queries the com thread buffer to get data, and then aggregates it
     #and puts it on the live data feed. Optionally, the data is also
     #periodically saved to CSV.
-    from liveserial.logging import Logger
+    from liveserial.log import Logger
     dataqs = [c.data_q for c in coms]
     #The logger prints values to screen if it isn't running in plotting
     #mode. Plotting mode means that the plot window is present, or that
@@ -256,16 +256,19 @@ def run(args, runtime=None, testmode=False):
             if com is not None:
                 msg.std(com.port)
         return
-    
+
     #Wait until we have some data before the logger gets put to work with it.
     if not args["listen"]:
         from time import sleep
-        while not all([not com.data_q.empty() for com in coms]): # pragma: no cover
+        tries = 0
+        while (not all([not com.data_q.empty() for com in coms])
+               and tries < 10): # pragma: no cover
             #If we don't need this delay, it shouldn't trigger unit test
             #problems.
             sleep(0.05)
+            tries += 1
         logger.start()
-    
+
     #The plotter looks at the live feed data to plot the latest aggregated
     #points.
     if not args["noplot"] and not args["listen"]:
