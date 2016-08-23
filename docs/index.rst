@@ -16,6 +16,7 @@ Contents:
    logging.rst
    plotting.rst
    config.rst
+   simulate.rst
    
 Indices and tables
 ==================
