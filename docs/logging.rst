@@ -9,7 +9,7 @@ differentiated by the sensor key, the data is split in the plots and log files.
 In addition to just logging the data to `csv` files, the logging module also
 handles the periodic querying of the data queues that the serial monitor threads
 continuously write to (see :doc:`monitor`). Thus, even in the event that the user
-chooses no file logging, a :class:`liveserial.logging.Logger` instance is still
+chooses no file logging, a :class:`liveserial.log.Logger` instance is still
 needed to help the :doc:`plotting` and :doc:`monitor` to talk to each other.
 
 There are two different intervals configured for the logging:
@@ -23,6 +23,6 @@ Because the logger implements :class:`threading.Timer` to handle the aggregation
 and saving, the main thread doesn't experience latency for large datasets being
 written to disk, which allows the plotting to continue smoothly.
 
-.. automodule:: liveserial.logging
+.. automodule:: liveserial.log
    :synopsis: Sensor data separation, aggregation and logging.
    :members:      

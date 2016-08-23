@@ -9,10 +9,32 @@ allow multi-thread access to putting and getting data.
 
 .. autoclass:: liveserial.monitor.ComMonitorThread
    :members:
-      
 
+Configuration Objects
+---------------------
+
+Because the monitors can be configured using an external file, we have an
+additional object definition that represents a pre-configured sensor, and which
+provides methods for parsing raw data according to the pre-configured format.
+
+.. autoclass:: liveserial.monitor.Sensor
+   :members:
+
+Inferring Raw Data Format
+-------------------------
+
+When sensors are not pre-configured, the package provides options for inferring
+the format of data by looking for string-valued columns that may represent
+sensor keys and then trying `int` and `float` parsing on the remaining
+columns. The inferrence is handled on a per-port basis using a class instance
+that looks at the first `15` raw lines and attempts to guess what kinds of
+sensors are present.
+
+.. autoclass:: liveserial.monitor.FormatInferrer
+   :members:
+      
 Live Feed for Data Aggregation
-==============================
+------------------------------
 
 Serial port data is read off by the :class:`~liveserial.monitor.ComMonitorThread`
 instances. However, the amount of data generated on the serial stream exceeds
@@ -26,7 +48,7 @@ values are stored in :class:`~liveserial.monitor.LiveDataFeed`.
    :members:
 
 Useful Utility Functions
-========================
+------------------------
 
 The monitoring module also exposes some useful functions for interacting with
 the data and error queues, and for listing available serial ports on a machine.

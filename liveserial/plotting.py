@@ -9,7 +9,7 @@ from liveserial import msg
 import numpy as np
 from threading import Timer
 
-def colorspace(size, cmap=cm.rainbow):
+def colorspace(size, cmap=cm.winter):
     """Returns an cycler over a linear color space with 'size' entries.
     
     :arg int size: the number of colors to define in the space.
@@ -33,6 +33,8 @@ class Plotter(animation.TimedAnimation):
         window (float): width of the plot window for sensors.
         testmode (bool): when True, the animator is not initialized so that a
           backend isn't required to run the unit tests.
+        logger (log.Logger): logger instance for interacting with config
+          parameters.
         plotargs (dict): arguments that get passed through directly to the
           `matplotlib` plotting function.
 
@@ -46,12 +48,13 @@ class Plotter(animation.TimedAnimation):
 
     """
     def __init__(self, livefeed, interval, maxlen=100, window=20,
-                 testmode=False, **plotargs):
+                 testmode=False, logger=None, **plotargs):
         self.livefeed = livefeed
         self.interval = interval
         self.maxlen = maxlen
         self.window = window
         self.testmode = testmode
+        self.logger = logger
         self.plotargs = plotargs
         self.lines = {}
         self.axes = {}
@@ -61,9 +64,15 @@ class Plotter(animation.TimedAnimation):
         """Sensor keys, ordered alphabetically; this is the order in which the
         subplots show up in the figure.
         """
+        self._timer = None
+        """Timer for unit testing the plotting code data acquisition.
+        """
         
         #Find out how many subplots we will need; sort their keys for plotting.
-        self._plotorder = sorted(self.livefeed.cur_data.keys())
+        self._plotorder = sorted(self.livefeed.cur_data.keys(), key=lambda k: str(k))
+        if len(self._plotorder) == 0: # pragma: no cover
+            raise ValueError("Live feed has no sensor data keys. "
+                             "Can't setup plotting.")
         import matplotlib.pyplot as plt
         from matplotlib.lines import Line2D
 
@@ -75,10 +84,20 @@ class Plotter(animation.TimedAnimation):
         from collections import deque
         for isense, sensor in enumerate(self._plotorder):
             axes[isense,0].set_xlabel('t')
-            axes[isense,0].set_ylabel(sensor)
+            if isinstance(sensor, str):
+                label = self.logger.sensor_option(sensor, "label", sensor)
+                port = self.logger.sensor_option(sensor, "port")
+                if port is not None:
+                    ylabel = "{} ({})".format(label, port)
+                else: # pragma: no cover
+                    ylabel = label
+                axes[isense,0].set_ylabel(ylabel)
+            else:
+                axes[isense,0].set_ylabel("Auto {}".format(isense + 1))
+                
             line = Line2D([], [], color=cspace[isense])
             axes[isense,0].add_line(line)
-            axes[isense,0].set_xlim((0, 22.5))
+            axes[isense,0].set_xlim((0, window + 2.5))
             self.lines[sensor] = line
             self.ts[sensor] = deque(maxlen=self.maxlen)
             self.ys[sensor] = deque(maxlen=self.maxlen)
@@ -116,6 +135,9 @@ class Plotter(animation.TimedAnimation):
                 # We don't want the tests to run long enough for this window to
                 # kick in (at least for the moment).
                 self.axes[sensor].set_xlim((self.ts[sensor][0], t + 2.5))
+
+            self.axes[sensor].relim() # reset intern limits of the current axes 
+            self.axes[sensor].autoscale_view()   # reset axes limits 
             
         self._drawn_artists = [self.lines[s] for s in self._plotorder]
         if self.testmode:

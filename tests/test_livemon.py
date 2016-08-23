@@ -3,7 +3,7 @@ method with different combinations of script arguments.
 """
 import pytest
 # The virtual, pseudorandom port is setup as a session fixture in conftest.py
-def _get_sargs(args):
+def get_sargs(args):
     """Returns the list of arguments parsed from sys.argv.
     """
     import sys
@@ -15,7 +15,7 @@ def test_examples():
     """Makes sure the script examples work properly.
     """
     argv = ["py.test", "-examples"]
-    _get_sargs(argv)
+    assert get_sargs(argv) is None
     
 def test_list(isnt):
     """Tests the port listing function of the package.
@@ -24,17 +24,19 @@ def test_list(isnt):
     from liveserial.livemon import _list_serial
     allports = _list_serial()
     if not isnt:
-        assert _list_serial("/dev/tty.lscom-w")
+        assert _list_serial(["/dev/tty.lscom-w"])
     assert "/dev/tty.lscom-r" in allports
 
     #Also, make sure that if the port isn't in the list, we exit gracefully.
     argv = ["py.test", "bogus-port"]
-    assert _get_sargs(argv) is None
+    assert get_sargs(argv) is None
     
     #Finally, just check that the printing functionality of the entry script
     #works as expected. Here we are just betting against unhandled exceptions.
     argv = ["py.test", "list"]
-    _get_sargs(argv)
+    args = get_sargs(argv)
+    from liveserial.livemon import run
+    assert run(args) is None
 
 def test_com():
     """Tests that the com thread can read from the virtual serial port.
@@ -42,15 +44,15 @@ def test_com():
     from liveserial.livemon import _get_com, _com_start
     from time import sleep
     argv = ["py.test", "/dev/tty.lscom-r", "-virtual"]
-    args = _get_sargs(argv)
+    args = get_sargs(argv)
     #Create and start the com thread.
-    com = _get_com(args)
-    _com_start(com)
+    coms = _get_com(args)
+    _com_start(coms)
 
     #Wait for a second so that data can accumulate. Then terminate the thread.
-    com.join(1, terminate=False)
-    assert not(com.data_q.empty())
-    com.join(1)
+    coms[0].join(1, terminate=False)
+    assert not(coms[0].data_q.empty())
+    coms[0].join(1)
 
 def _raise_sigint(duration):
     """Raises the standard ^C signal interrupt to test proper termination of the
@@ -72,7 +74,7 @@ def test_listen():
     """Tests the logger's listening ability on a com port.
     """
     argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-listen"]
-    args = _get_sargs(argv)    
+    args = get_sargs(argv)    
     from liveserial.livemon import run
     vardir = run(args, 2)
     #Make sure that the relevant objects were created and run properly.
@@ -81,7 +83,7 @@ def test_listen():
     assert "logger" in vardir
 
     assert all(vardir["feed"].has_new_data.values())
-
+    
 def test_logging(tmpdir):
     """Tests the sensor logging in temporary directory.
     """
@@ -89,7 +91,7 @@ def test_logging(tmpdir):
         sub = tmpdir.mkdir(method)
         argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-logdir", str(sub),
                 "-logfreq", "1.5", "-noplot", "-method", method]
-        args = _get_sargs(argv)
+        args = get_sargs(argv)
         
         from liveserial.livemon import run
         vardir = run(args, 4)
@@ -115,7 +117,7 @@ def test_plotting():
     """
     #We don't need to log for the plotting tests.
     argv = ["py.test", "/dev/tty.lscom-r", "-virtual"]
-    args = _get_sargs(argv)
+    args = get_sargs(argv)
 
     #The matplotlib import takes a long time, let this run for at least 7
     #seconds so that we can collect data for 2.
@@ -138,13 +140,13 @@ def test_logplot(tmpdir):
     sub = tmpdir.mkdir("combined")
     argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-logdir", str(sub),
             "-logfreq", "1.5"]
-    args = _get_sargs(argv)
+    args = get_sargs(argv)
     
     from liveserial.livemon import run
     vardir = run(args, 4, True)
     #This is the one place where we make sure getting a single item works.
     from liveserial.monitor import get_item_from_queue
-    assert get_item_from_queue(vardir["com"].data_q) is not None
+    assert get_item_from_queue(vardir["com"][0].data_q) is not None
     assert "logger" in vardir
     assert "com" in vardir
     
