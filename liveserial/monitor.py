@@ -370,7 +370,12 @@ class ComMonitorThread(threading.Thread):
             parameters.
         """
         if isinstance(config, str):
-            from ConfigParser import ConfigParser
+            try:
+                from configparser import ConfigParser
+            except ImportError:
+                #Renaming of modules to lower case in python 3.
+                from ConfigParser import ConfigParser
+                
             parser = ConfigParser()
             parser.readfp(open(config))
         else: # pragma: no cover
@@ -397,7 +402,7 @@ class ComMonitorThread(threading.Thread):
                 #Override the value using the config value unless it doesn't
                 #exist.
                 if parser.has_option(portsec, option):
-                    params[option] = parser.get(portsec, option, value)
+                    params[option] = parser.get(portsec, option)
 
         #Python's bool is interesting because bool('0') => True. So, we test
         #explicitly here for the option value the user set.
@@ -418,7 +423,9 @@ class ComMonitorThread(threading.Thread):
         from fnmatch import fnmatch
         for section in parser.sections():
             if fnmatch(section, "sensor.*"):
-                sport = parser.get(section, "port", None)
+                sport = None
+                if parser.has_option(section, "port"):
+                    sport = parser.get(section, "port")
                 if sport == port:
                     name = section.split('.')[1]
                     result.add_sensor(name, dict(parser.items(section)))

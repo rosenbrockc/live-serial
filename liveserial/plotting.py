@@ -66,7 +66,7 @@ class Plotter(animation.TimedAnimation):
         """
         
         #Find out how many subplots we will need; sort their keys for plotting.
-        self._plotorder = sorted(self.livefeed.cur_data.keys())
+        self._plotorder = sorted(self.livefeed.cur_data.keys(), key=lambda k: str(k))
         if len(self._plotorder) == 0: # pragma: no cover
             raise ValueError("Live feed has no sensor data keys. "
                              "Can't setup plotting.")

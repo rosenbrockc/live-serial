@@ -63,7 +63,12 @@ class Logger(object):
 
         self.config = None
         if config is not None:
-            from ConfigParser import ConfigParser
+            try:
+                from configparser import ConfigParser
+            except ImportError:
+                #Renaming of modules to lower case in python 3.
+                from ConfigParser import ConfigParser
+
             if isinstance(config, str):
                 self.config = ConfigParser()
                 self.config.readfp(open(config))
@@ -86,7 +91,7 @@ class Logger(object):
         if sensor in self._config_sections:
             section = self._config_sections[sensor]
             if self.config.has_option(section, option):
-                return self.config.get(section, option, default)
+                return self.config.get(section, option)
             else: # pragma: no cover
                 return default
         else: # pragma: no cover
@@ -104,7 +109,7 @@ class Logger(object):
             if fnmatch(section, "sensor.*"):
                 key = None
                 if self.config.has_option(section, "key"):
-                    key = self.config.get(section, "key", None)
+                    key = self.config.get(section, "key")
                 if key is not None:
                     self._config_sections[key] = section
                 

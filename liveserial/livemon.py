@@ -227,7 +227,10 @@ def run(args, runtime=None, testmode=False):
         """
         msg.warn("SIGINT >> cleaning up threads.", -1)
         logger.stop()
-        com.join()
+        for com in coms:
+            com.join(1)
+        if plotter is not None:
+            plotter.stop()
         print("")
         exit(0)
         #Matplotlib's cleanup code for animations is lousy--it doesn't
@@ -244,6 +247,7 @@ def run(args, runtime=None, testmode=False):
         
     #Now that we actually have a way to quit the infinite loop, we can start the
     #data acquisition process.
+    plotter = None
     _com_start(coms)
     if any([com is None for com in coms]): # pragma: no cover
         msg.err("One of the COM threads didn't initialize properly.")
@@ -264,7 +268,6 @@ def run(args, runtime=None, testmode=False):
     
     #The plotter looks at the live feed data to plot the latest aggregated
     #points.
-    plotter = None
     if not args["noplot"] and not args["listen"]:
         tries = 0
         while not logger.ready(0.05) and tries < 10:
