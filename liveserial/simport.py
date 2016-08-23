@@ -47,6 +47,9 @@ def _parser_options():
                               "type. Format: `-dtype sensor_0 int float`."))
     parser.add_argument("-seed", type=int, default=42,
                         help="Set the random seed for the generated data.")
+    parser.add_argument("-runtime", type=float,
+                        help=("Specify a maximum runtime before automatically "
+                              "terminating the writer threads."))
     args = base.exhandler(examples, parser)
     if args is None:
         return
@@ -59,7 +62,9 @@ def _parser_options():
     for port in args["ports"]:
         if name != "nt":
             portname = "/dev/tty.{}".format(port)
-        else:
+        else: # pragma: no cover
+            #We only have unit testing configured for unix-based systems at the
+            #moment, so this check will never fire.
             portname = port
             
         if portname not in allports:
@@ -109,16 +114,13 @@ def _setup_simulator(args, port):
     simsig = ComSimulatorThread(port, sensors, dtypes, args["seed"])
     return simsig
 
-def run(args):
-    """Starts monitoring of the serial data in a separate thread. Starts the
-    plotting or logging based on command-line args.
+def run(args, runtime=None):
+    """Starts simulating the serial data in a separate thread.
 
     Args:
         runtime (float): how many seconds to run for before terminating.
-        vardir (dict): to get access to the COM port, logger, feed and plotter
-          objects.
     """
-    if args is None:
+    if args is None: # pragma: no cover
         return
 
     simsigs = []
@@ -126,7 +128,7 @@ def run(args):
         simsigs.append(_setup_simulator(args, port))
 
     import signal
-    def exit_handler(signal, frame):
+    def exit_handler(signal, frame): # pragma: no cover
         """Cleans up the serial communication, plotting and logging.
         """
         for simsig in simsigs:
@@ -138,6 +140,7 @@ def run(args):
     for simsig in simsigs:
         simsig.start()
 
+    runtotal = 0.
     while all([sim.is_alive() for sim in simsigs]):
         #Here is the tricky bit; we want to join the threads for a second to
         #keep the main thread busy while everything is going on. More than a
@@ -145,8 +148,13 @@ def run(args):
         #process. We instead join on every thread for fractions of a second.
         for simsig in simsigs:
             simsig.join(1./len(simsigs), terminate=False)
+        runtotal += 1.
+        if runtime is not None and runtotal >= runtime:
+            for simsig in simsigs:
+                simsig.join(1)            
 
 if __name__ == '__main__': # pragma: no cover
     #We skip the unit tests for this section because it is short and clear
     #and just calls methods that are being tested elsewhere.
-    run(_parser_options())
+    args = _parser_options()
+    run(args, args["runtime"])

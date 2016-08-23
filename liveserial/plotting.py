@@ -89,7 +89,7 @@ class Plotter(animation.TimedAnimation):
                 port = self.logger.sensor_option(sensor, "port")
                 if port is not None:
                     ylabel = "{} ({})".format(label, port)
-                else:
+                else: # pragma: no cover
                     ylabel = label
                 axes[isense,0].set_ylabel(ylabel)
             else:
