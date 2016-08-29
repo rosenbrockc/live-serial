@@ -8,11 +8,7 @@ import matplotlib
 #We have to fiddle with the backends for Windows and Unix-based, otherwise we
 #get unhandled exceptions or program-stopped working problems.
 import os
-if os.name == "nt":
-    pass
-    #if testmode:
-    #    matplotlib.use("Agg")
-else:
+if os.name != "nt":
     matplotlib.use("Agg" if testmode else "TkAgg")
 
 from liveserial import msg
