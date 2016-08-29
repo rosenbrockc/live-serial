@@ -277,17 +277,15 @@ class Logger(object):
                 from numpy import array
                 writer = csv.writer(f)
                 #Generate a new vector of logids with the indices set back to
-                #what they were before.
+                #what they were before. Index 0 is the time id, so it should be
+                #included always.
                 unmix = [0]
                 for li in logids:
                     if li == vindex:
                         unmix.append(1)
                         continue
-                    if li < vindex:
-                        unmix.append(li+2)
-                    else:
-                        unmix.append(li+1)
-
+                    unmix.append(li+1)
+                    
                 for idata in self.csvdata[sensor]:
                     writer.writerow([idata[li] for li in unmix])
                 #Since we appended the most recent data points, just reset the

@@ -4,7 +4,17 @@ from liveserial.base import testmode
 from matplotlib import cm
 import matplotlib.animation as animation
 import matplotlib
-matplotlib.use("Agg" if testmode else "TkAgg")
+
+#We have to fiddle with the backends for Windows and Unix-based, otherwise we
+#get unhandled exceptions or program-stopped working problems.
+import os
+if os.name == "nt":
+    pass
+    #if testmode:
+    #    matplotlib.use("Agg")
+else:
+    matplotlib.use("Agg" if testmode else "TkAgg")
+
 from liveserial import msg
 import numpy as np
 from threading import Timer
@@ -94,8 +104,8 @@ class Plotter(animation.TimedAnimation):
                 axes[isense,0].set_ylabel(ylabel)
             else:
                 axes[isense,0].set_ylabel("Auto {}".format(isense + 1))
-                
-            line = Line2D([], [], color=cspace[isense])
+
+            line = Line2D([], [], color=cspace[isense], linewidth=2)
             axes[isense,0].add_line(line)
             axes[isense,0].set_xlim((0, window + 2.5))
             self.lines[sensor] = line

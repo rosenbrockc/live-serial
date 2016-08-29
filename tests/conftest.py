@@ -14,8 +14,12 @@ def simulated_serial(request):
     """Starts the simulated serial port for the unit tests. Assumes that `socat`
     has been initialized already to setup the virtual COM ports.
     """
+    from os import name
     from liveserial.simulator import ComSimulatorThread
-    simulator = ComSimulatorThread("lscom-w")
+    if name == "nt":
+        simulator = ComSimulatorThread("COM1")
+    else:
+        simulator = ComSimulatorThread("lscom-w")
     simulator.start()
     def cleanup_simulator():
         simulator.join(1)

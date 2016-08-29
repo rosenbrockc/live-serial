@@ -9,8 +9,13 @@ def simulated_multi(request):
     has been initialized already to setup the virtual COM ports.
     """
     from liveserial.simulator import ComSimulatorThread
-    simulator = ComSimulatorThread("lscom-mw", ["P", "S"],
-                                   [(int, float), (float, int)])
+    from os import name
+    if name == "nt":
+        simulator = ComSimulatorThread("COM3", ["P", "S"],
+                                        [(int, float), (float, int)])
+    else:
+        simulator = ComSimulatorThread("lscom-mw", ["P", "S"],
+                                    [(int, float), (float, int)])
     simulator.start()
     def cleanup_simulator():
         simulator.join(1)
@@ -20,15 +25,16 @@ def test_multi_listen(isnt):
     """Tests the explicit monitor setup using the 'multiple.cfg' file in the
     current directory.
     """
+    from os import path
     if isnt:
-        strport = "{}"
+        argv = ["py.test", "COM2", "COM4", "-virtual", "-listen", "-config",
+                path.join("tests", "ntmultiple.cfg")]
     else:
         strport = "/dev/tty.{}"
-        
-    from os import path
-    argv = ["py.test", strport.format("lscom-r"), strport.format("lscom-mr"),
-            "-virtual", "-listen", "-config", path.join("tests", "multiple.cfg")]
-    args = get_sargs(argv)    
+        argv = ["py.test", strport.format("lscom-r"),
+                strport.format("lscom-mr"), "-virtual", "-listen", "-config",
+                path.join("tests", "multiple.cfg")]
+    args = get_sargs(argv)
     from liveserial.livemon import run
     vardir = run(args, 2)
     
@@ -43,16 +49,16 @@ def test_multi_logplot(isnt, tmpdir):
     """Tests the simultaneous logging and plotting from multiple ports with
     multiple sensors per port.
     """
+    from os import path
+    sub = tmpdir.mkdir("multilog")
     if isnt:
-        strport = "{}"
+        argv = ["py.test", "COM2", "COM4", "-virtual", "-logdir", str(sub),
+                "-config", path.join("tests", "ntmultiple.cfg")]
     else:
         strport = "/dev/tty.{}"
-        
-    from os import path        
-    sub = tmpdir.mkdir("multilog")
-    argv = ["py.test", strport.format("lscom-r"), strport.format("lscom-mr"),
-            "-virtual", "-logdir", str(sub),
-            "-config", path.join("tests", "multiple.cfg")]
+        argv = ["py.test", strport.format("lscom-r"),
+                strport.format("lscom-mr"), "-virtual", "-logdir", str(sub),
+                "-config", path.join("tests", "multiple.cfg")]
     args = get_sargs(argv)
     
     from liveserial.livemon import run

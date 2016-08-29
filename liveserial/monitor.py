@@ -457,7 +457,7 @@ class ComMonitorThread(threading.Thread):
             self.serial_port = serial.Serial(**self.serial_arg)
             msg.info("Serial port communication enabled.", 2)
         except serial.SerialException as e: # pragma: no cover
-            self.error_q.put(e.message)
+            self.error_q.put(e.strerror)
             return
 
         from time import time
@@ -536,15 +536,20 @@ def enumerate_serial_ports():
     from glob import glob
     if name  == 'nt': # pragma: no cover
         #We don't have CI setup for windows at the moment.
-        outAvailablePorts = []
-        for i in range(256):
-            try:
-                s = serial.Serial(i)
-                outAvailablePorts.append(s.portstr)
-                s.close()   
-            except serial.SerialException:
-                pass
-        return outAvailablePorts
+        from os import waitpid, path
+        from subprocess import Popen, PIPE
+        cmd = 'powershell -c "[System.IO.Ports.SerialPort]::getportnames()"'
+        pps = Popen(cmd, stdout=PIPE, stderr=PIPE)
+        output, error = pps.communicate()
+
+        if len(error) > 0:
+            msg.error(''.join([s.decode("UTF-8") for s in error]))
+
+        result = []
+        for oline in output.decode("UTF-8").strip().split():
+            if len(oline) > 0:
+                result.append(oline)
+        return result
     else:
         return glob('/dev/tty.*')
     

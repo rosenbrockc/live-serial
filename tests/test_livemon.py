@@ -23,9 +23,12 @@ def test_list(isnt):
     #We know that the two virtual ports should be in the list.
     from liveserial.livemon import _list_serial
     allports = _list_serial()
-    if not isnt:
+    if isnt:
+        assert _list_serial(["COM1"])
+        assert "COM2" in allports
+    else:
         assert _list_serial(["/dev/tty.lscom-w"])
-    assert "/dev/tty.lscom-r" in allports
+        assert "/dev/tty.lscom-r" in allports
 
     #Also, make sure that if the port isn't in the list, we exit gracefully.
     argv = ["py.test", "bogus-port"]
@@ -38,12 +41,15 @@ def test_list(isnt):
     from liveserial.livemon import run
     assert run(args) is None
 
-def test_com():
+def test_com(isnt):
     """Tests that the com thread can read from the virtual serial port.
     """
     from liveserial.livemon import _get_com, _com_start
     from time import sleep
-    argv = ["py.test", "/dev/tty.lscom-r", "-virtual"]
+    if isnt:
+        argv = ["py.test", "COM2", "-virtual"]
+    else:
+        argv = ["py.test", "/dev/tty.lscom-r", "-virtual"]
     args = get_sargs(argv)
     #Create and start the com thread.
     coms = _get_com(args)
@@ -69,12 +75,15 @@ def _raise_sigint(duration):
     from threading import Timer
     timer = Timer(duration, _interrupt)
     timer.start()
-    
-def test_listen():
+
+def test_listen(isnt):
     """Tests the logger's listening ability on a com port.
     """
-    argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-listen"]
-    args = get_sargs(argv)    
+    if isnt:
+        argv = ["py.test", "COM2", "-virtual", "-listen"]
+    else:
+        argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-listen"]
+    args = get_sargs(argv)
     from liveserial.livemon import run
     vardir = run(args, 2)
     #Make sure that the relevant objects were created and run properly.
@@ -83,14 +92,18 @@ def test_listen():
     assert "logger" in vardir
 
     assert all(vardir["feed"].has_new_data.values())
-    
-def test_logging(tmpdir):
+
+def test_logging(tmpdir, isnt):
     """Tests the sensor logging in temporary directory.
     """
     for method in ["last", "average"]:
         sub = tmpdir.mkdir(method)
-        argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-logdir", str(sub),
-                "-logfreq", "1.5", "-noplot", "-method", method]
+        if isnt:
+            argv = ["py.test", "COM2", "-virtual", "-logdir",
+                    str(sub), "-logfreq", "1.5", "-noplot", "-method", method]
+        else:
+            argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-logdir",
+                    str(sub), "-logfreq", "1.5", "-noplot", "-method", method]
         args = get_sargs(argv)
         
         from liveserial.livemon import run
@@ -109,14 +122,17 @@ def test_logging(tmpdir):
         #Also make sure that we have a file for every sensor.
         assert nfiles == len(vardir["logger"].csvdata)
 
-def test_plotting():
+def test_plotting(isnt):
     """Tests the plotting data functionality. Because backends aren't always
     easily configured for unit tests, the actual calls to matplotlib to plot are
     ignored by the plotter; instead the tests just verify that the data is
     accessible and that it is passed around correctly.
     """
     #We don't need to log for the plotting tests.
-    argv = ["py.test", "/dev/tty.lscom-r", "-virtual"]
+    if isnt:
+        argv = ["py.test", "COM2", "-virtual"]
+    else:
+        argv = ["py.test", "/dev/tty.lscom-r", "-virtual"]
     args = get_sargs(argv)
 
     #The matplotlib import takes a long time, let this run for at least 7
@@ -133,13 +149,17 @@ def test_plotting():
     assert all([len(q) > 0
                 for q in vardir["plotter"].ys.values()])    
 
-def test_logplot(tmpdir):
+def test_logplot(tmpdir, isnt):
     """Tests the logging and plotting running simultaneously.
     """
     #For this test, we only use the averaging method (which is the default).
     sub = tmpdir.mkdir("combined")
-    argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-logdir", str(sub),
-            "-logfreq", "1.5"]
+    if isnt:
+        argv = ["py.test", "COM2", "-virtual", "-logdir", str(sub),
+                "-logfreq", "1.5"]
+    else:
+        argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-logdir", str(sub),
+                "-logfreq", "1.5"]
     args = get_sargs(argv)
     
     from liveserial.livemon import run

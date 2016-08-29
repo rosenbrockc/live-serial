@@ -41,6 +41,7 @@ class ComSimulatorThread(threading.Thread):
         """Starts simulating the communication.
         """
         import random, time, math
+        import os
         #Seed the random number generator so that it always produces the same
         #values for the random variables.
         random.seed(self.seed)
@@ -60,7 +61,7 @@ class ComSimulatorThread(threading.Thread):
                 elif t is float:
                     raw.append(random.randint(-1, 1) + random.random())
 
-            data = ' '.join([str(d) for d in raw]) + '\n'
+            data = ' '.join([str(d) for d in raw]) + os.linesep
             #Usually people encode with UTF-8. However, we know that our data is
             #really simple and ASCII takes less space.
             x = self.serial.write(data.encode("ascii"))
