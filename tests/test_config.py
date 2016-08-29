@@ -3,12 +3,15 @@
 import pytest
 from test_livemon import get_sargs
 
-def test_auto():
+def test_auto(isnt):
     """Tests the automatic monitor setup using the 'sensors.cfg' file in the
     current directory.
     """
-    argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-listen", "-auto"]
-    args = get_sargs(argv)    
+    if isnt:
+        argv = ["py.test", "COM2", "-virtual", "-listen", "-auto"]
+    else:
+        argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-listen", "-auto"]
+    args = get_sargs(argv)
     from liveserial.livemon import run
     vardir = run(args, 2)
     #Make sure that the relevant objects were created and run properly.
@@ -18,39 +21,50 @@ def test_auto():
 
     assert all(vardir["feed"].has_new_data.values())   
 
-def test_quick():
+def test_quick(isnt):
     """Tests the quick initialization of a ComMonitorThread using only the port
     name.
     """
     from liveserial.monitor import ComMonitorThread
-    com = ComMonitorThread.from_port("/dev/tty.lscom-r", virtual=True)
+    if isnt:
+        com = ComMonitorThread.from_port("COM2", virtual=True)
+    else:
+        com = ComMonitorThread.from_port("/dev/tty.lscom-r", virtual=True)
     com.start()
 
     #Wait for a second so that data can accumulate. Then terminate the thread.
     com.join(1, terminate=False)
     assert not(com.data_q.empty())
     com.join(1)
-    
-def test_explicit():
+
+def test_explicit(isnt):
     """Tests the automatic monitor setup when an explicit path is provided to a
     configuration file.
     """
     from os import path
-    argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-listen",
-            "-config", path.join("tests", "exception.cfg")]
+    if isnt:
+        argv = ["py.test", "COM2", "-virtual", "-listen",
+                "-config", path.join("tests", "ntexception.cfg")]
+    else:
+        argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-listen",
+                "-config", path.join("tests", "exception.cfg")]
     args = get_sargs(argv)
     from liveserial.livemon import run
     with pytest.raises(ValueError):
         vardir = run(args, 2)
 
-def test_logging(tmpdir):
+def test_logging(tmpdir, isnt):
     """Tests logging when the config specifies special column names and
     restricts which columns to use.
     """
     #For this test, we only use the averaging method (which is the default).
     sub = tmpdir.mkdir("configlog")
-    argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-logdir", str(sub),
-            "-logfreq", "1.5", "-auto"]
+    if isnt:
+        argv = ["py.test", "COM2", "-virtual", "-logdir", str(sub),
+                "-logfreq", "1.5", "-auto"]
+    else:
+        argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-logdir", str(sub),
+                "-logfreq", "1.5", "-auto"]
     args = get_sargs(argv)
     
     from liveserial.livemon import run

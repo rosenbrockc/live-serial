@@ -25,7 +25,7 @@ def exhandler(function, parser):
         function()
         return
     if args["verbose"]:
-        from msg import set_verbosity
+        from liveserial.msg import set_verbosity
         set_verbosity(args["verbose"])
 
     args.update(vars(parser.parse_known_args()[0]))

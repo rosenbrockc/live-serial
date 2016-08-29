@@ -1,10 +1,6 @@
 argparse
-coverage
-python-coveralls
 pypandoc
-pytest
 termcolor
 numpy
 matplotlib
 pyserial
-tox

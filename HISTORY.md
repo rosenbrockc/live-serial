@@ -1,5 +1,11 @@
 # `live-serial` Revision History
 
+## Revision 0.1.1
+
+- Added support for unit testing on Windows.
+- Debugged the logging and plotting for Windows.
+- Added example configuration files for Windows.
+
 ## Revision 0.1.0
 
 - Added support for multiple ports, with multiple sensors on each port.
