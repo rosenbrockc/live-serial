@@ -29,7 +29,7 @@ def test_writing(isnt):
     else:
         argv = ["py.test", "lscom-w", "lscom-mw", "-sensors", "lscom-w",
                 "K", "None", "lscom-mw", "P", "S", "-dtype",
-                "S", "float", "int"]
+                "S", "float", "int", "None", "int", "float"]
     args = get_sargs(argv)
 
     #We just run this for 3 seconds to make sure all the configuration options

@@ -1,5 +1,6 @@
 """Methods for grabbing data and logging it to CSV files.
 """
+from liveserial import msg
 class Logger(object):
     """Logs data points from the serial port to CSV. The arguments to this class
     constructor are also available as attributes on the class instance.
@@ -30,7 +31,8 @@ class Logger(object):
           appended to
         csvdata (dict): lists of sensor time and value readings, keyed by sensor
           identifier.
-        config (ConfigParser): global sensor configuration parser.
+        config (ConfigParser or str): global sensor configuration parser. If
+          `str`, then the config is loaded from the specified file path.
     """
     def __init__(self, interval, dataqs, livefeed,
                  method="last", logdir=None, logfreq=10,
@@ -46,7 +48,16 @@ class Logger(object):
                 
         self.livefeed = livefeed
         self.method = method
-        self.logdir = logdir
+
+        from os import path, makedirs
+        if logdir is not None:
+            self.logdir = path.abspath(path.expanduser(logdir))
+            if not path.isdir(self.logdir):
+                msg.info("Making new directory path '{}'.".format(self.logdir))
+                makedirs(self.logdir)
+        else:
+            self.logdir = None
+        
         self.logfreq = logfreq
         self.lastsave = None
         self.csvdata = {}
@@ -61,58 +72,30 @@ class Logger(object):
         timer again once it fires.
         """
 
-        self.config = None
-        if config is not None:
-            try:
-                from configparser import ConfigParser
-            except ImportError: # pragma: no cover
-                #Renaming of modules to lower case in python 3.
-                from ConfigParser import ConfigParser
+        self.config = config
 
-            if isinstance(config, str):
-                self.config = ConfigParser()
-                self.config.readfp(open(config))
-            else: # pragma: no cover
-                self.config = config
-
-        self._config_sections = {}
-        """dict: keys are sensor ids; values are section names in the config
-        file.
-        """
-        self._invert_config()
-
-    def sensor_option(self, sensor, option, default=None):
+    def sensor_option(self, sensor, option, default=None, cast=None):
         """Returns the specified sensor option if available.
 
         Args:
         sensor (str): name of the sensor to return `option` for.
         option (str): option name.
         """
-        if sensor in self._config_sections:
-            section = self._config_sections[sensor]
-            if self.config.has_option(section, option):
-                return self.config.get(section, option)
-            else: # pragma: no cover
-                return default
+        from liveserial.config import sensors, Sensor
+        s = sensors(self.config, sensor)
+        if isinstance(s, Sensor):
+            if hasattr(s, option):
+                value = getattr(s, option)
+            elif option in s.options: # pragma: no cover
+                value = s.options[option]
+                
+            if cast is not None: # pragma: no cover
+                return cast(value)
+            else:
+                return value
         else: # pragma: no cover
             return default
-        
-    def _invert_config(self):
-        """Extracts the sensor keys and the sections they map to from the
-        configuration file.
-        """
-        if self.config is None:
-            return
-
-        from fnmatch import fnmatch
-        for section in self.config.sections():
-            if fnmatch(section, "sensor.*"):
-                key = None
-                if self.config.has_option(section, "key"):
-                    key = self.config.get(section, "key")
-                if key is not None:
-                    self._config_sections[key] = section
-                
+                        
     def ready(self, delay=None):
         """Returns True once we have accumulated a few timer calls of data. This
         ensures that we know how many sensors are running on the same COM port.
@@ -179,12 +162,10 @@ class Logger(object):
                     #For the values, we take a simple mean.
                     from numpy import mean
                     ldata = mean(qdata, axis=0)
-                    data = (tstamp, ldata[1])
                 elif self.method == "last":
-                    data = qdata[-1][0:2]
                     ldata = qdata[-1]
-                if data is not None:
-                    self.livefeed.add_data(sensor, data)
+                if ldata is not None:
+                    self.livefeed.add_data(sensor, ldata)
                 if self.logdir is not None:
                     if sensor not in self.csvdata:
                         self.csvdata[sensor] = []
@@ -209,27 +190,32 @@ class Logger(object):
                 #it is here as as sanity check to keep the file system clean.
                 continue
 
+            #Let's figure out how many columns to post in the header.
+            if len(self.csvdata[sensor]) > 0:
+                #We subtract 1 because the time is handled separately.
+                N = len(self.csvdata[sensor][0])-1
+            else: # pragma: no cover
+                #No sense in writing to the file at this time; we have no
+                #data to write!
+                continue
+
             #Check if we have configuration settings available for this sensor.
             columns = None
-            if self.config is not None and sensor in self._config_sections:
+            if self.config is not None:
                 logids = self.sensor_option(sensor, "logging")
-                if logids is not None:
-                    logids = list(map(int, logids.split(',')))
+                    
                 #We have one issue with the column labeling. We have switched
                 #the important value to be in position 1, whereas it could be
                 #anywhere in the list. Fix the order of the columns.
                 cols = self.sensor_option(sensor, "columns")
-                if cols is not None:
-                    cols = cols.split(',')
                 if logids is None and cols is not None: # pragma: no cover
                     #It is possible that the user will specify one or the other,
                     #but I want to limit the number of concurrent streams for
                     #the unit tests (especially for multi-port testing).
                     logids = list(range(len(cols)))
-                                  
-                vindex = self.sensor_option(sensor, "value_index")
-                if vindex is not None:
-                    vindex = int(vindex)
+
+                vindex = self.sensor_option(sensor, "value_index", [0])
+
                 #The other issue is that if the user limits the columns being
                 #logged to include only a few columns, they will supply only a
                 #few column labels.
@@ -239,29 +225,18 @@ class Logger(object):
                 elif cols is not None: # pragma: no cover
                     msg.warn("A different number of column headings than "
                              "logging ids was specified in configuration.")
-                else:
-                    columns = None
-                name = self._config_sections[sensor].split('.')[-1]
             else:
                 logids = None
-                vindex = 0
-                name = sensor
-            
-            #Let's figure out how many columns to post in the header.
-            if len(self.csvdata[sensor]) > 0:
-                #We subtract 1 because the time is handled separately.
-                N = len(self.csvdata[sensor][0])-1
-            else: # pragma: no cover
-                #No sense in writing to the file at this time; we have no
-                #data to write!
-                continue
-            
+                vindex = [0]
+                        
             if logids is None:
+                #The user didn't say what to log, so we log everything.
                 logids = list(range(N))
 
-            logpath = path.join(self.logdir, "{}.csv".format(name))
+            logpath = path.join(self.logdir, "{}.csv".format(sensor))
+            from os import linesep
             if not path.isfile(logpath):
-                with open(logpath, 'w') as f:
+                with open(logpath, 'wb') as f:
                     if columns is None:
                         columns = {li: "Value {}".format(i+1)
                                    for i, li in enumerate(logids)}
@@ -269,25 +244,20 @@ class Logger(object):
                     #logindex. However, we must remember that until now, we have
                     #kept the value in position 1, so we have to unmix that.
                     strcols = [columns[li] for li in logids]
-                    f.write("{}\n".format(','.join(["Time"] + strcols)))
+                    header = "{}{}".format(','.join(["Time"] + strcols), linesep)
+                    f.write(header.encode("ASCII"))
 
-            with open(logpath, 'a') as f:
+            from six import PY2
+            mode = 'ab' if PY2 else 'a'
+            kwds = {} if PY2 else {"newline": ''}
+            with open(logpath, mode, **kwds) as f:
                 #We log the full data stream from the sensor unless the logging is
                 #limited by the configuration file.
-                from numpy import array
-                writer = csv.writer(f)
-                #Generate a new vector of logids with the indices set back to
-                #what they were before. Index 0 is the time id, so it should be
-                #included always.
-                unmix = [0]
-                for li in logids:
-                    if li == vindex:
-                        unmix.append(1)
-                        continue
-                    unmix.append(li+1)
-                    
+                logids.insert(0, 0)
+                writer = csv.writer(f)                    
                 for idata in self.csvdata[sensor]:
-                    writer.writerow([idata[li] for li in unmix])
+                    writer.writerow([idata[li] for li in logids])
+                    
                 #Since we appended the most recent data points, just reset the
                 #lists of points to be empty again.
                 self.csvdata[sensor] = []        

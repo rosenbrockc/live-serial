@@ -2,6 +2,7 @@
 """
 import pytest
 from test_livemon import get_sargs
+from liveserial.config import reset_config
 
 @pytest.fixture(scope="module", autouse=True)
 def simulated_multi(request):
@@ -44,6 +45,7 @@ def test_multi_listen(isnt):
     assert "logger" in vardir
 
     assert all(vardir["feed"].has_new_data.values())
+    reset_config()
 
 def test_multi_logplot(isnt, tmpdir):
     """Tests the simultaneous logging and plotting from multiple ports with
@@ -104,4 +106,4 @@ def test_multi_logplot(isnt, tmpdir):
                 for q in vardir["plotter"].ts.values()])
     assert all([len(q) > 0
                 for q in vardir["plotter"].ys.values()])    
-
+    reset_config()

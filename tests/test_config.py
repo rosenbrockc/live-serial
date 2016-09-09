@@ -2,15 +2,13 @@
 """
 import pytest
 from test_livemon import get_sargs
+from liveserial.config import reset_config
 
 def test_auto(isnt):
     """Tests the automatic monitor setup using the 'sensors.cfg' file in the
     current directory.
     """
-    if isnt:
-        argv = ["py.test", "COM2", "-virtual", "-listen", "-auto"]
-    else:
-        argv = ["py.test", "/dev/tty.lscom-r", "-virtual", "-listen", "-auto"]
+    argv = ["py.test", "auto", "-virtual", "-listen", "-auto"]
     args = get_sargs(argv)
     from liveserial.livemon import run
     vardir = run(args, 2)
@@ -19,7 +17,8 @@ def test_auto(isnt):
     assert "com" in vardir
     assert "logger" in vardir
 
-    assert all(vardir["feed"].has_new_data.values())   
+    assert all(vardir["feed"].has_new_data.values())
+    reset_config()
 
 def test_quick(isnt):
     """Tests the quick initialization of a ComMonitorThread using only the port
@@ -52,13 +51,14 @@ def test_explicit(isnt):
     from liveserial.livemon import run
     with pytest.raises(ValueError):
         vardir = run(args, 2)
+    reset_config()
 
 def test_logging(tmpdir, isnt):
     """Tests logging when the config specifies special column names and
     restricts which columns to use.
     """
     #For this test, we only use the averaging method (which is the default).
-    sub = tmpdir.mkdir("configlog")
+    sub = tmpdir.join("configlog")
     if isnt:
         argv = ["py.test", "COM2", "-virtual", "-logdir", str(sub),
                 "-logfreq", "1.5", "-auto"]
@@ -97,9 +97,25 @@ def test_logging(tmpdir, isnt):
     assert "plotter" in vardir
     assert "feed" in vardir
     assert len(vardir["plotter"].ts) == len(vardir["feed"].cur_data)
-    assert len(vardir["plotter"].ys) == len(vardir["feed"].cur_data)
+    linecount = sum([len(v) for v in vardir["plotter"]._vindices.values()])
+    assert len(vardir["plotter"].ys) == linecount
     assert all([len(q) > 0
                 for q in vardir["plotter"].ts.values()])
     assert all([len(q) > 0
                 for q in vardir["plotter"].ys.values()])    
+    reset_config()
 
+def test_legend():
+    """Makes sure that the legend is being examined in the config files and
+    added to the plot.
+    """
+    argv = ["py.test", "auto"]
+    args = get_sargs(argv)
+    
+    from liveserial.livemon import run
+    vardir = run(args, 2, True)
+    assert "logger" in vardir
+    assert "com" in vardir
+    assert "plotter" in vardir
+    assert any([len(v) > 1 for v in vardir["plotter"]._vindices.values()])
+    reset_config()

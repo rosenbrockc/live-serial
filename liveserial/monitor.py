@@ -10,123 +10,6 @@ except ImportError: # pragma: no cover
     from queue import Empty
     
 from liveserial import msg
-portdefaults = {
-    "port_baud": 9600,
-    "port_stopbits": serial.STOPBITS_ONE,
-    "port_parity": serial.PARITY_NONE,
-    "port_timeout":  0.01,
-    "virtual": False
-    }
-"""dict: default parameters passed to the :class:`serial.Serial` constructor for
-communicating with the serial port.
-"""
-
-class Sensor(object):
-    """Represents the configuration of a sensor on the serial port.
-
-    Args:
-        monitor (ComMonitorThread): parent instance that this sensor is being logged
-          with.
-        name (str): name of the sensor in the configuration file.
-        dtype (list): of `str` or `type`; items must belong to ['key', int, float,
-          str]. Represents the order in which values are found in a single line of
-          data read from the serial port. Thus `W 129229 0.928379` would be given by
-          ["key", int, float].
-        label (str): for plots, what to put on the y-axis. Defaults to `name`.
-        port (str): name of the port to read this sensor from. Defaults to
-          :attr:`ComMonitorThread.port`.
-        value_index (int): column index of the value that will be plotted.
-    """
-    def __init__(self, monitor, name, key=None, value_index=None,
-                 dtype=["key", "int", "float"], label=None, port=None,
-                 **kwargs):
-
-        self.monitor = monitor
-        self.name = name
-        self.key = key
-
-        #We analyze the string values set for the dtypes to return the python
-        #`types` that can cast strings to actual type values.
-        self.dtype = []
-        self._keyloc = None
-        if isinstance(dtype, str):
-            dtype = dtype.split(',')
-        for i, sentry in enumerate(dtype):
-            if sentry == "key":
-                self._keyloc = i
-                if key is None:
-                    raise ValueError("You must specify a sensor key if 'key' "
-                                     "is in the 'dtype' option list.")
-            else:
-                caster = eval(sentry)
-                self.dtype.append(caster)
-
-        self.value_index = int(value_index)
-        self.label = name if label is None else label
-        self.port = monitor.port if port is None else port
-
-    def _cast(self, raw):
-        """Casts all the values in the given list to their relevant data
-        types. Assumes that the list has the correct format.
-        
-        Args:
-            vals (list): string values from the split line to cast.
-        """
-        if (len(raw) != len(self.dtype)
-            + (1 if self._keyloc is not None else 0)): # pragma: no cover
-            return
-        
-        try:
-            vals = []
-            for iv, v in enumerate(raw):
-                if iv != self._keyloc:
-                    vals.append(self.dtype[len(vals)](v))
-                    
-            if self.value_index is not None and self.value_index > 0:
-                #We have to change the order in which the values are
-                #returned. The plotting and logging routines expect the plotted
-                #value to be in position 2 (after sensor and timestamp). The
-                #remaining values can come in any order.
-
-                #The value index is specified relative the full list of columns;
-                #but we exclude the key from the list of values. If a key is
-                #specified, we need to subtract 1 from value index, if the key
-                #index comes before the value index.
-                if self._keyloc is not None and self._keyloc < self.value_index:
-                    first = vals[self.value_index-1]
-                else:
-                    first = vals[self.value_index]
-                    
-                result = [first]
-                for i, val in enumerate(vals):
-                    if i != self.value_index:
-                        result.append(val)
-                return result
-            else: # pragma: no cover 
-                return vals
-        except ValueError: # pragma: no cover
-            return None
-        
-    def parse(self, raw):
-        """Parses a single line read from the serial port and returns a tuple of
-        values.
-
-        Args:
-            raw (list): of split ASCII-encoded strings from the serial port. 
-        
-        Returns:
-            list: of values parsed using :attr:`Sensor.dtype` casting.
-            None: if the `key` was not found in the correct location.
-        """
-        result = None
-        if self._keyloc is not None:
-            if raw[self._keyloc] == self.key:
-                result = self._cast(raw)
-        elif self.key is None:
-            result = self._cast(raw)
-            
-        return result
-
 class FormatInferrer(object):
     """Class that can infer the data types of an unknown sensor stream, provided
     they are consistent between calls.
@@ -146,10 +29,11 @@ class FormatInferrer(object):
         sensor key can be found in the raw line.
         """
         self.inferred = {}
-        """dict: keys are inferred sensor ids, values are lists of casting
-        types as for the implementation in :class:`Sensor`. This dict only
+        """dict: keys are inferred sensor ids, values are lists of casting types as for
+        the implementation in :class:`liveserial.config.Sensor`. This dict only
         gets populated when no configuration is available and data structure has
         to be inferred from the incoming stream.
+
         """        
 
     def _infer_structure(self, raw):
@@ -234,7 +118,13 @@ class FormatInferrer(object):
             #the formatting of the stream so that it should always parse
             #properly.
             return None, None
-        
+
+rxdelims = {}
+"""dict: keys are port names; values are compiled regex objects. We wanted to
+put these in the thread object, but then it can't be pickled, which makes issues
+for the multiprocessing. Instead, we just have to do a dict lookup in the local
+:meth:`Thread.run()`.
+"""        
 class ComMonitorThread(threading.Thread):
     """ A thread for monitoring a COM port. The COM port is 
         opened when the thread is started.
@@ -275,12 +165,17 @@ class ComMonitorThread(threading.Thread):
             inferrer is not created.
         virtual (bool): when True, additional serial port parameters are set so that
             the monitor can work with `socat` or other virtual ports.
+        encoding (str): encoding type used to decode the byte stream from the serial
+            port.
+        delimiter (str): regex describing the sequence of characters used to
+            separate columns of values in a single line from the serial port.
     Attributes:
         alive (threading.Event): event for asynchronously handling the reads from
           the serial port.
         serial_arg (dict): arguments used to contstruct the :class:`serial.Serial`.
         serial_port (serial.Serial): serial instance for communication.
-        sensors (dict): keys are sensor names; values are Sensor instances used to
+        sensors (dict): keys are sensor names; values are
+          :class:`liveserial.config.Sensor`instances used to
           parse raw lines read from the serial port.
         inferrer (FormatInferrer): for inferring the format in the absence of
             configured sensor structure.
@@ -288,16 +183,17 @@ class ComMonitorThread(threading.Thread):
     def __init__(self, data_q, error_q, port, port_baud,
                  port_stopbits=serial.STOPBITS_ONE,
                  port_parity=serial.PARITY_NONE, port_timeout  = 0.01,
-                 listener=False, virtual=False, infer_limit=15):
+                 listener=False, virtual=False, infer_limit=15,
+                 encoding="UTF-8", delimiter=r"\s"):
         threading.Thread.__init__(self)
 
         self.port = port
         self.serial_port = None
         self.serial_arg  = dict(port      = port,
-                                baudrate  = port_baud,
-                                stopbits  = port_stopbits,
+                                baudrate  = int(port_baud),
+                                stopbits  = float(port_stopbits),
                                 parity    = port_parity,
-                                timeout   = port_timeout)
+                                timeout   = float(port_timeout))
         if virtual:
             msg.std("Running in virtual serial port mode.", 2)
             self.serial_arg["dsrdtr"] = True
@@ -306,6 +202,13 @@ class ComMonitorThread(threading.Thread):
         self.data_q   = data_q
         self.error_q  = error_q
         self.listener = listener
+        self.encoding = encoding
+        
+        import re
+        self.delimiter = delimiter
+        global rxdelims
+        rxdelims[port] = re.compile(delimiter)
+        
         self.sensors = {}
         self._manual_sensors = False
         """bool: when True, the sensors list was constructed manually using a
@@ -368,19 +271,7 @@ class ComMonitorThread(threading.Thread):
         Returns:
             ComMonitorThread: instance created using the configuration
             parameters.
-        """
-        if isinstance(config, str):
-            try:
-                from configparser import ConfigParser
-            except ImportError: # pragma: no cover
-                #Renaming of modules to lower case in python 3.
-                from ConfigParser import ConfigParser
-                
-            parser = ConfigParser()
-            parser.readfp(open(config))
-        else: # pragma: no cover
-            parser = config
-        
+        """        
         from multiprocessing import Queue
         #We allow the user to choose to use a common data and error queue
         #between all the threads. If they don't specify one, then we will just
@@ -393,57 +284,31 @@ class ComMonitorThread(threading.Thread):
         if errorq is None: # pragma: no cover
             errorq = Queue()
 
-        #If the port has non-default settings, they will be in a special section
-        #with the port name.
-        portsec = "port.{}".format(port)
-        params = portdefaults.copy()
-        if parser.has_section(portsec):
-            for option, value in params.items():
-                #Override the value using the config value unless it doesn't
-                #exist.
-                if parser.has_option(portsec, option):
-                    params[option] = parser.get(portsec, option)
-
-        #Python's bool is interesting because bool('0') => True. So, we test
-        #explicitly here for the option value the user set.
-        import re
-        if not isinstance(params["virtual"], bool):
-            if re.match(r"\b\d+\b", params["virtual"]):
-                params["virtual"] = bool(int(params["virtual"]))
-            elif re.match(r"[a-z]", params["virtual"][0], re.I):
-                params["virtual"] = params["virtual"][0].lower() == 't'
-
-        vtext = "{}: using {} as config-set serial paramaters."
+        from liveserial.config import ports
+        params = ports(config, port)
+        vtext = "{}: using {} as config-set serial parameters."
         msg.std(vtext.format(port, params))
         result = ComMonitorThread(dataq, errorq, port, listener=listener,
                                   **params)
 
-        #Now that we have the thread, we can add configuration for each of the
-        #sensors in the config file.
-        from fnmatch import fnmatch
-        for section in parser.sections():
-            if fnmatch(section, "sensor.*"):
-                sport = None
-                if parser.has_option(section, "port"):
-                    sport = parser.get(section, "port")
-                if sport == port:
-                    name = section.split('.')[1]
-                    result.add_sensor(name, dict(parser.items(section)))
+        from liveserial.config import sensors, Sensor
+        sdict = sensors(config, port=port, monitor=result)
+        for sensor, instance in sdict.items():
+            result.add_sensor(sensor, instance)
 
         return result
 
-    def add_sensor(self, name, options):
+    def add_sensor(self, name, sensor):
         """Adds a sensor to the COM monitors active list. Sensors in the active
         list have their data parsed and pushed to the data queue. If no sensors
         are added to the list, the monitor will try to infer the sensor
         configuration using the first few raw data samples.
 
         Args:
-            options (dict): keys are option names from the sensors.cfg file; values
-              are the option values.
+            sensor (liveserial.config.Sensor): instance with parsed
+              configuration values.
         """
         self._manual_sensors = True
-        sensor = Sensor(self, name, **options)
         self.sensors[name] = sensor
         
     def run(self):
@@ -463,6 +328,9 @@ class ComMonitorThread(threading.Thread):
         from time import time
         start = time()
         lastlisten = None
+        decoderr = 0 #Number of types the decode has failed.
+        rxsplit = rxdelims[self.port]
+        
         while self.alive.isSet():
             line = self.serial_port.readline()                
             if self.listener:
@@ -473,16 +341,28 @@ class ComMonitorThread(threading.Thread):
                 #are covered by the unit tests, but coverage claims that this
                 #continue statement is not...
                 continue # pragma: no cover
-                    
-            raw = line.decode("ASCII").split()
+
+            try:
+                raw = line.decode(self.encoding).strip()
+            except: # pragma: no cover
+                #It is too much hassle to get our port data simulator to simulate garbage
+                #for now. TODO: update the simulator to randomly spew out garbage.
+                if len(line) > 0:
+                    decoderr += 1
+                    if decoderr < 3:
+                        emsg = "Couldn't decode line {} using {}."
+                        msg.warn(emsg.format(line, self.encoding), -1)
+
+            raw = rxsplit.split(raw)
             if len(raw) == 0: # pragma: no cover
                 #No data read from the stream.
                 continue
             
             vals, sensor = None, None
             if self._manual_sensors:
-                for sensor in self.sensors.values():
-                    vals, sensor = sensor.parse(raw), sensor.key
+                for osensor in self.sensors.values():
+                    vals, skey = osensor.parse(raw), osensor.key
+                    sensor = osensor.name
                     #The parsing will return None if the raw line does not apply
                     #to its configuration. The moment we found the one that does
                     #apply, there is not sense in still checking.
@@ -492,7 +372,7 @@ class ComMonitorThread(threading.Thread):
                 #We try to infer the structure of the data from the raw line.
                 if self.inferrer is not None:
                     vals, sensor = self.inferrer.parse(raw)
-                
+
             if vals is not None and len(vals) > 0:
                 if sensor is None:
                     #We use the id of the com thread (which corresponds
@@ -560,7 +440,7 @@ def get_all_from_queue(Q):
     Args:
         Q (Queue.Queue): queue to empty items from.
     """
-    msg.info("Retrieving entire queue.", 2)
+    msg.info("Retrieving entire queue.", 3)
     try:
         while True:
             yield Q.get_nowait()

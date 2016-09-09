@@ -92,6 +92,8 @@ def _parser_options():
     if args["dtype"]:
         current = None
         for dtype in args["dtype"]:
+            if dtype == "None":
+                dtype = None
             if dtype in allsensors:
                 current = dtype
             else:
@@ -111,6 +113,7 @@ def _setup_simulator(args, port):
     dtypes = []
     for s in sensors:
         dtypes.append(tuple(args["dtype"][s]))
+
     simsig = ComSimulatorThread(port, sensors, dtypes, args["seed"])
     return simsig
 
