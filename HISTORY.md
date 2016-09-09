@@ -1,5 +1,11 @@
 # `live-serial` Revision History
 
+## Revision 0.1.2
+
+Added several enhancements and bug fixes as described in:
+- Issues #3 and #4
+- Issue #6 through #12
+
 ## Revision 0.1.1
 
 - Added support for unit testing on Windows.

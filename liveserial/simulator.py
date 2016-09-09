@@ -20,7 +20,7 @@ class ComSimulatorThread(threading.Thread):
           the serial port.
     """
     def __init__(self, port="lscom-w", sensors=["W", None, "K"],
-                 dataform=[(int, float), (float, float), (int, float)],
+                 dataform=[(int, float), (float, float, float), (int, float)],
                  seed=42):
         threading.Thread.__init__(self)
         self.dataform = {s: d for s, d in zip(sensors, dataform)}

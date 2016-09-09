@@ -41,8 +41,6 @@ class Plotter(animation.TimedAnimation):
           backend isn't required to run the unit tests.
         logger (log.Logger): logger instance for interacting with config
           parameters.
-        plotargs (dict): arguments that get passed through directly to the
-          `matplotlib` plotting function.
 
     Attributes:
         lines (dict): of :class:`matplotlib.lines.Line2D` being animated with
@@ -54,18 +52,21 @@ class Plotter(animation.TimedAnimation):
 
     """
     def __init__(self, livefeed, interval, maxlen=100, window=20,
-                 testmode=False, logger=None, **plotargs):
+                 testmode=False, logger=None):
         self.livefeed = livefeed
         self.interval = interval
         self.maxlen = maxlen
         self.window = window
         self.testmode = testmode
         self.logger = logger
-        self.plotargs = plotargs
         self.lines = {}
         self.axes = {}
         self.ts = {}
         self.ys = {}
+        self._vindices = {}
+        """Keys are sensor names; values are lists of value_index options from
+        the configuration of each sensor.
+        """
         self._plotorder = []
         """Sensor keys, ordered alphabetically; this is the order in which the
         subplots show up in the figure.
@@ -75,40 +76,80 @@ class Plotter(animation.TimedAnimation):
         """
         
         #Find out how many subplots we will need; sort their keys for plotting.
-        self._plotorder = sorted(self.livefeed.cur_data.keys(), key=lambda k: str(k))
+        self._plotorder = sorted(self.livefeed.cur_data.keys(),
+                                 key=lambda k: str(k))
+        self._vindices = {s: self.logger.sensor_option(s, "value_index", [1])
+                          for s in self._plotorder}
+
         if len(self._plotorder) == 0: # pragma: no cover
             raise ValueError("Live feed has no sensor data keys. "
                              "Can't setup plotting.")
+
+        #For the plot styling, we use the config files. Logger has access to the
+        #config file setting, so we just use that.
+        from liveserial.config import plot
         import matplotlib.pyplot as plt
         from matplotlib.lines import Line2D
 
         #We are going to use a common time axis
+        figopts = plot(self.logger.config, "figure")
+        axesopts = plot(self.logger.config, "axes")
+        if "figsize" not in figopts:
+            figopts["figsize"] = (12, 3*len(self.livefeed.cur_data))
+        else:
+            figopts["figsize"] = tuple(map(float,figopts["figsize"].split(',')))
+            
         fig, axes = plt.subplots(len(self.livefeed.cur_data), 1, sharex=True,
-                                 squeeze=False,
-                                 figsize=(12, 3*len(self.livefeed.cur_data)))
-        cspace = colorspace(len(axes))[0]
+                                 squeeze=False, subplot_kw=axesopts, **figopts)
+
+        from itertools import cycle
         from collections import deque
+        totlines = sum([len(v) for v in self._vindices.values()])
+        cspace = cycle(colorspace(totlines)[0])
+
+        lineopts = plot(self.logger.config, "line")
+        labelopts = plot(self.logger.config, "label")
+        from six import string_types
         for isense, sensor in enumerate(self._plotorder):
-            axes[isense,0].set_xlabel('t')
-            if isinstance(sensor, str):
+            axes[isense,0].set_xlabel('t', **labelopts)
+            if isinstance(sensor, string_types):
                 label = self.logger.sensor_option(sensor, "label", sensor)
                 port = self.logger.sensor_option(sensor, "port")
                 if port is not None:
                     ylabel = "{} ({})".format(label, port)
                 else: # pragma: no cover
                     ylabel = label
-                axes[isense,0].set_ylabel(ylabel)
+                axes[isense,0].set_ylabel(ylabel, **labelopts)
             else:
-                axes[isense,0].set_ylabel("Auto {}".format(isense + 1))
+                axes[isense,0].set_ylabel("Auto {}".format(isense + 1),
+                                          **labelopts) 
 
-            line = Line2D([], [], color=cspace[isense], linewidth=2)
-            axes[isense,0].add_line(line)
-            axes[isense,0].set_xlim((0, window + 2.5))
-            self.lines[sensor] = line
+            legends = None
+            if len(self._vindices[sensor]) > 1:
+                legends = self.logger.sensor_option(sensor, "legends")
+
+            for vi, vindex in enumerate(self._vindices[sensor]):
+                if legends is not None:
+                    legend = legends[vi]
+                else:
+                    legend = None
+                    
+                line = Line2D([], [], color=next(cspace), linewidth=2,
+                              label=legend, **lineopts)
+                axes[isense,0].add_line(line)
+                axes[isense,0].set_xlim((0, window + 2.5))
+                self.lines[(sensor, vindex)] = line
+                self.ys[(sensor, vindex)] = deque(maxlen=self.maxlen)
+                
             self.ts[sensor] = deque(maxlen=self.maxlen)
-            self.ys[sensor] = deque(maxlen=self.maxlen)
             self.axes[sensor] = axes[isense, 0]
+            if legends is not None:
+                self.axes[sensor].legend()
 
+        tickopts = plot(self.logger.config, "ticks")
+        if len(tickopts) > 0:
+            plt.tick_params(**tickopts)
+                
         from os import name
         if not self.testmode: # pragma: no cover
             if name != "nt":
@@ -133,10 +174,14 @@ class Plotter(animation.TimedAnimation):
         """
         for sensor in self._plotorder:
             #First, we get the latest data point from the live feed.
-            t, y = self.livefeed.read_data(sensor)
+            ldata = self.livefeed.read_data(sensor)
+            t = ldata[0]
             self.ts[sensor].append(t)
-            self.ys[sensor].append(y)
-            self.lines[sensor].set_data(self.ts[sensor], self.ys[sensor])
+            
+            for vindex in self._vindices[sensor]:
+                self.ys[(sensor, vindex)].append(ldata[vindex])
+                ts, ys = self.ts[sensor], self.ys[(sensor, vindex)]
+                self.lines[(sensor, vindex)].set_data(ts, ys)
             if t > self.window: # pragma: no cover
                 # We don't want the tests to run long enough for this window to
                 # kick in (at least for the moment).
@@ -145,7 +190,7 @@ class Plotter(animation.TimedAnimation):
             self.axes[sensor].relim() # reset intern limits of the current axes 
             self.axes[sensor].autoscale_view()   # reset axes limits 
             
-        self._drawn_artists = [self.lines[s] for s in self._plotorder]
+        self._drawn_artists = self.lines.values()
         if self.testmode:
             self._timer = Timer(self.interval, self._draw_frame, (0,))
             self._timer.start()

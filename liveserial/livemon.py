@@ -51,76 +51,130 @@ def _list_serial(ports=None):
         return result
     else:
         return available
+
+def _list_config_ports(configfile):
+    """Lists all the ports explicitly mentioned in the config file.
+    """
+    try:
+        from configparser import ConfigParser
+    except ImportError: # pragma: no cover
+        #Renaming of modules to lower case in python 3.
+        from ConfigParser import ConfigParser
+
+    config = ConfigParser()
+    config.readfp(open(configfile))
     
+    from fnmatch import fnmatch
+    result = []
+    for section in config.sections():
+        if fnmatch(section, "sensor.*"):
+            if config.has_option(section, "port"):
+                port = config.get(section, "port")
+                if port not in result:
+                    result.append(port)
+        elif fnmatch(section, "port.*"):
+            port = section[5:]
+            if port not in result: # pragma: no cover
+                result.append(port)
+
+    return result
+
+script_options = {
+    "port": {"nargs": "+",
+             "help": "Name of the port(s) to plot/log."},
+    "-noplot": {"action": "store_true",
+                "help": "Don't plot the data; only log it."},
+    "-autoconf": {"action": "store_true",
+                  "help": ("Runs in automatic mode by loading a "
+                           "configuration file in the current directory "
+                           "called 'sensors.cfg'.")},
+    "-config": {"help": ("Specify a configuration file to get sensor "
+                         "setup information from.")},
+    "-logdir": {"help": ("Path to the directory where sensor data will "
+                         "be logged.")},
+    "-baudrate": {"type": int, "default": 9600,
+                  "help": ("Rate at which information is transferred in a "
+                           "communication channel (in bits/second).")},
+    "-stopbits": {"type": float, "default": 1., "choices": [1, 1.5, 2],
+                  "help": "Serial communication parameter."},
+    "-parity": {"type": str, "default": 'N',
+                "choices": ['N', 'E', 'O', 'M', 'S'],
+                "help": "Serial communication parameter."},
+    "-timeout": {"type": float, "default": 0.01,
+                 "help": ("The timeout used for reading the COM port. If "
+                          "this value is low, the thread will return data "
+                          "in finer grained chunks, with more accurate "
+                          "timestamps, but it will also consume more CPU.")},
+    "-refresh": {"type": int, "default": 100,
+                 "help": ("How often (in milliseconds) to plot new data "
+                          "obtained from the serial port.")},
+    "-buffertime": {"type": float, "default": 25,
+                    "help": ("How often (in milliseconds) to query buffered data "
+                             "obtained from the serial port.")},
+    "-logfreq": {"type": float, "default": 10,
+                 "help": ("How often (in *seconds*) to save the buffered "
+                          "data points to CSV.")},
+    "-method": dict(default="average", choices=["last", "average"],
+                    help=("Specifies how buffered data is aggregated each "
+                          "time it is read from the serial port.")),
+    "-listen": dict(action="store_true",
+                    help=("Prints the raw output from the serial port "
+                          "instead of plotting and logging it. Useful "
+                          "for debugging port connection issues.")),
+    "-virtual": dict(action="store_true",
+                     help=("Specifies that the port being connected to is "
+                           "virtual (e.g., with `socat`), which changes the "
+                           "parameters for connection.")),
+    "-sensors": dict(nargs="+", default="all",
+                     help="Filter the list of sensors being logged/plotted."),
+    "-maxpts": dict(type=int, default=100,
+                    help=("Maximum number of values to keep in the plot "
+                          "for each sensor")),
+    "-window": dict(type=float, default=20.,
+                    help="Width of window in time units."),
+    "-wait": dict(type=float, default=1.,
+                  help=("Number of seconds to wait before failing because "
+                        "no data is present on the stream for plotting."))
+    }
+
 def _parser_options():
     """Parses the options and arguments from the command line."""
+    #We have two options: get some of the details from the config file,
     import argparse
     from liveserial import base
-    parser = argparse.ArgumentParser(parents=[base.bparser],
-                                     description="Real-time serial port plotter/logger.")
-    parser.add_argument("port", nargs="+",
-                        help="Name of the port(s) to plot/log.")
-    parser.add_argument("-noplot", action="store_true",
-                        help=("Don't plot the data; only log it."))
-    parser.add_argument("-auto", action="store_true",
-                        help=("Runs in automatic mode by loading a "
-                              "configuration file in the current directory "
-                              "called 'sensors.cfg'."))
-    parser.add_argument("-config",
-                        help=("Specify a configuration file to get sensor "
-                              "setup information from."))
-    parser.add_argument("-logdir",
-                        help=("Path to the directory where sensor data will "
-                              "be logged."))
-    parser.add_argument("-baudrate", type=int, default=9600,
-                        help=("Rate at which information is transferred in a "
-                              "communication channel (in bits/second)."))
-    parser.add_argument("-stopbits", type=float, default=1., choices=[1, 1.5, 2],
-                        help="Serial communication parameter.")
-    parser.add_argument("-parity", type=str, default='N',
-                        choices=['N', 'E', 'O', 'M', 'S'],
-                        help="Serial communication parameter.")
-    parser.add_argument("-timeout", type=float, default=0.01,
-                        help=("The timeout used for reading the COM port. If "
-                              "this value is low, the thread will return data "
-                              "in finer grained chunks, with more accurate "
-                              "timestamps, but it will also consume more CPU."))
-    parser.add_argument("-refresh", type=int, default=100,
-                        help=("How often (in milliseconds) to plot new data "
-                              "obtained from the serial port."))
-    parser.add_argument("-buffertime", type=float, default=25,
-                        help=("How often (in milliseconds) to query buffered data "
-                              "obtained from the serial port."))
-    parser.add_argument("-logfreq", type=float, default=10,
-                        help=("How often (in *seconds*) to save the buffered "
-                              "data points to CSV."))
-    parser.add_argument("-method", default="average", choices=["last", "average"],
-                        help=("Specifies how buffered data is aggregated each "
-                              "time it is read from the serial port."))
-    parser.add_argument("-listen", action="store_true",
-                        help=("Prints the raw output from the serial port "
-                              "instead of plotting and logging it. Useful "
-                              "for debugging port connection issues."))
-    parser.add_argument("-virtual", action="store_true",
-                        help=("Specifies that the port being connected to is "
-                              "virtual (e.g., with `socat`), which changes the "
-                              "parameters for connection."))
-    parser.add_argument("-sensors", nargs="+", default="all",
-                        help="Filter the list of sensors being logged/plotted.")
-    parser.add_argument("-maxpts", type=int, default=100,
-                        help=("Maximum number of values to keep in the plot "
-                              "for each sensor"))
-    parser.add_argument("-window", type=float, default=20.,
-                        help="Width of window in time units.")
+    pdescr = "Real-time serial port plotter/logger."
+    parser = argparse.ArgumentParser(parents=[base.bparser], description=pdescr)
+    for arg, options in script_options.items():
+        parser.add_argument(arg, **options)
+        
     args = base.exhandler(examples, parser)
     if args is None:
         return
 
+    #Handle the automatic configuration file setup.
+    if args["autoconf"] or (args["port"]==["auto"] and not args["config"]):
+        from os import path
+        args["config"] = path.abspath("sensors.cfg")
+        msg.info("Using {} as auto-selected config path".format(args["config"]))
+
+    if args["config"]:
+        #Try and override any of the other options with those of the config
+        #file, if it exists.
+        from os import path
+        args["config"] = path.abspath(path.expanduser(args["config"]))
+        from liveserial.config import script
+        args.update(script(args["config"]))
+        msg.info("Using script args from config {}.".format(args["config"]))
+        
     if args["port"] == ["list"]:
         msg.okay("Available Serial Ports")
         for port in _list_serial():
             msg.info("  {}".format(port))
         return None
+    elif args["port"] == ["auto"]:
+        #We load all the ports present in the config file and assume that the
+        #user meant all of those.
+        args["port"] = _list_config_ports(args["config"])
     else:
         if not _list_serial(args["port"]):
             return None
@@ -132,11 +186,6 @@ def _parser_options():
     if args["noplot"] and not args["logdir"]: # pragma: no cover
         msg.warn("Data will only be logged if `-logdir` is specified.", -1)
 
-    #Handle the automatic configuration file setup.
-    if args["auto"]:
-        from os import path
-        args["config"] = path.abspath("sensors.cfg")
-        
     return args
 
 def _get_com(args):
@@ -273,7 +322,8 @@ def run(args, runtime=None, testmode=False):
     #points.
     if not args["noplot"] and not args["listen"]:
         tries = 0
-        while not logger.ready(0.05) and tries < 10:
+        maxtries = args["wait"]/0.05
+        while not logger.ready(0.05) and tries <= maxtries:
             tries += 1
 
         from liveserial.plotting import Plotter
@@ -303,6 +353,6 @@ def run(args, runtime=None, testmode=False):
                     plotter.stop()
 
     return vardir
-        
+
 if __name__ == '__main__': # pragma: no cover
     run(_parser_options())
