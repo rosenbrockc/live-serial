@@ -11,8 +11,15 @@ def test_auto(isnt, tmpdir):
     """
     from os import path
     sub = tmpdir.join("aggregate")
-    argv = ["py.test", "auto", "-config", path.join("tests", "aggregate.cfg"),
-            "-logdir", str(sub), "-logfreq", "1.5"]
+    if isnt:
+        argv = ["py.test", "auto",
+                "-config", path.join("tests", "ntaggregate.cfg"),
+                "-logdir", str(sub), "-logfreq", "1.5"]
+    else:
+        argv = ["py.test", "auto", "-config",
+                path.join("tests", "aggregate.cfg"),
+                "-logdir", str(sub), "-logfreq", "1.5"]
+
     args = get_sargs(argv)
     from liveserial.livemon import run
     vardir = run(args, 4, True)
