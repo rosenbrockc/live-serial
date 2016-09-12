@@ -12,12 +12,35 @@ class ComSimulatorThread(threading.Thread):
           specifies how a row of simulated data will look when written to the COM
           port.
         sensors (list): of `str` giving sensor ids for which data will be randomly
-          generated with equal probability between each sensor.
+          generated with equal probability between each sensor. If the sensor id
+          is `None`, then no sensor key will be written to the stream.
         seed (int): random seed so the values are predictable.
 
     Attributes:
         alive (threading.Event): event for asynchronously handling the reads from
           the serial port.
+
+    Examples:
+        Write three random columns with data types `int`, `float` and `float` to
+        `COM3` *without* any sensor identifying column. 
+
+        >>> from liveserial.simulator import ComSimulatorThread
+        >>> cst = ComSimulatorThread("COM3", sensors=[None], 
+            ... dataform=[(int, float, float)])
+        >>> cst.start()
+
+        Note that the writing happens in its own thread (:class:`ComSimulatorThread`
+        inherits from :class:`threading.Thread`), so it will run indefinitely if the
+        thread is not joined. A typical use case is:
+
+        >>> import signal
+        >>> def exit_handler(signal, frame):
+            ... cst.join(1)
+        >>> signal.signal(signal.SIGINT, exit_handler)
+        >>> cst.start()
+
+        This wires the signal interrupt request (usually raised by pressing ^C) to
+        join the simulator thread.
     """
     def __init__(self, port="lscom-w", sensors=["W", None, "K"],
                  dataform=[(int, float), (float, float, float), (int, float)],
@@ -38,7 +61,9 @@ class ComSimulatorThread(threading.Thread):
         self.alive.set()
         
     def run(self):
-        """Starts simulating the communication.
+        """Starts simulating the communication. This method should not be called
+        directly. Instead, it is invoked automatically when :meth:`start` is
+        called on this thread object.
         """
         import random, time, math
         import os

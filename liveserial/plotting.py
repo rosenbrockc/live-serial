@@ -48,7 +48,11 @@ class Plotter(animation.TimedAnimation):
         axes (dict): of :class:`matplotlib.axes.Axes` being animated with the
           serial data; keyed by the sensor identifiers.
         ts (dict): of lists of the last `maxlen` sensor timestamp readings.
-        ys (dict): of lists of the last `maxlen` sensor value readings.
+        ys (dict): of lists of the last `maxlen` sensor value readings. Keys for
+          this dict are sensor names if only one value is specified in the
+          sensor's `value_index` config option; otherwise, the keys are `(sensor,
+          vindex)` tuple, where `vindex` is the zero-based, integer column index
+          being plotted.
 
     """
     def __init__(self, livefeed, interval, maxlen=100, window=20,
@@ -116,7 +120,10 @@ class Plotter(animation.TimedAnimation):
                 label = self.logger.sensor_option(sensor, "label", sensor)
                 port = self.logger.sensor_option(sensor, "port")
                 if port is not None:
-                    ylabel = "{} ({})".format(label, port)
+                    if port == "aggregate":
+                        ylabel = "{} (agg.)".format(label)
+                    else:
+                        ylabel = "{} ({})".format(label, port)
                 else: # pragma: no cover
                     ylabel = label
                 axes[isense,0].set_ylabel(ylabel, **labelopts)
@@ -175,6 +182,10 @@ class Plotter(animation.TimedAnimation):
         for sensor in self._plotorder:
             #First, we get the latest data point from the live feed.
             ldata = self.livefeed.read_data(sensor)
+            if len(ldata) < 2:
+                #We don't have anything reasonable to plot; exit gracefully.
+                continue
+            
             t = ldata[0]
             self.ts[sensor].append(t)
             

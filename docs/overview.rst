@@ -16,4 +16,4 @@ simultaneously.
 
 .. automodule:: liveserial.livemon
    :synopsis: Script access to threading classes and methods.
-   :members:
+   :members: run

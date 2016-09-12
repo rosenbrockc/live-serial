@@ -10,16 +10,6 @@ allow multi-thread access to putting and getting data.
 .. autoclass:: liveserial.monitor.ComMonitorThread
    :members:
 
-Configuration Objects
----------------------
-
-Because the monitors can be configured using an external file, we have an
-additional object definition that represents a pre-configured sensor, and which
-provides methods for parsing raw data according to the pre-configured format.
-
-.. autoclass:: liveserial.monitor.Sensor
-   :members:
-
 Inferring Raw Data Format
 -------------------------
 

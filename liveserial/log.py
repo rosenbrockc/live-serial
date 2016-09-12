@@ -24,8 +24,10 @@ class Logger(object):
           logging is not enabled.
         config (ConfigParser): global sensor configuration parser; if the
           argument is a `str`, then the file path.
+        aggregate (bool): when True, the logger should check sensor config for
+          aggregate ports to be handled; otherwise, aggregate ports are ignored.
     Attributes:
-        timer (threading.Timer) executes calls to the serial port reader to get the
+        timer (threading.Timer): executes calls to the serial port reader to get the
           latest data and push it to the live feed.    
         lastsave (float): timestamp indicating the last time the CSV file was
           appended to
@@ -33,10 +35,13 @@ class Logger(object):
           identifier.
         config (ConfigParser or str): global sensor configuration parser. If
           `str`, then the config is loaded from the specified file path.
+        aggregate (dict): keys are *aggregate* sensor names; values are functions
+          that accept a dict of the latest physical sensor values, and return
+          single, aggregated values for plotting.
     """
     def __init__(self, interval, dataqs, livefeed,
                  method="last", logdir=None, logfreq=10,
-                 plotting=False, config=None):
+                 plotting=False, config=None, aggregate=False):
         
         self.interval = interval
         #Our first business is to make sure that we have only a list of *unique*
@@ -73,13 +78,49 @@ class Logger(object):
         """
 
         self.config = config
+        if aggregate:
+            self.aggregate = self._sensor_aggregates()
+        else:
+            self.aggregate = None
 
+    def _sensor_aggregates(self):
+        """Returns the transformations for each aggregate sensor so that they
+        can be quickly compiled each time the logger timer executes.
+        """
+        from liveserial.config import sensors
+        aggsensors = sensors(self.config, port="aggregate")
+        result = {}
+        for sensor, instance in aggsensors.items():
+            if (instance.transform is not None and
+                instance.sensors is not None):
+                def aggfun(aggdata):
+                    #We don't take the first index in the data element because
+                    #it is the time stamp, which must be common to all of them.
+                    v = []
+                    t = None
+                    for s in instance.sensors:
+                        if s in aggdata:
+                            v.append(aggdata[s][1:])
+                            if t is None:
+                                t = [aggdata[s][0]]
+
+                    for vals in zip(*v):
+                        t.append(instance.transform(vals))
+                    return t
+                        
+                result[sensor] = aggfun
+
+        return result
+        
     def sensor_option(self, sensor, option, default=None, cast=None):
         """Returns the specified sensor option if available.
 
         Args:
-        sensor (str): name of the sensor to return `option` for.
-        option (str): option name.
+            sensor (str): name of the sensor to return `option` for.
+            option (str): option name.
+            default: if the option is not configured, the default value to return.
+            cast (function): if the raw value needs to be cast or transformed, the
+                function to perform that transformation.
         """
         from liveserial.config import sensors, Sensor
         s = sensors(self.config, sensor)
@@ -153,6 +194,9 @@ class Logger(object):
         # We average/discard the data in the queue to produce the single entry that
         # will be posted to the livefeed.
         if havedata:
+            if self.aggregate:
+                aggdata = {}
+                
             for sensor, qdata in sensedata.items():
                 data = None
                 if self.method == "average":
@@ -164,15 +208,33 @@ class Logger(object):
                     ldata = mean(qdata, axis=0)
                 elif self.method == "last":
                     ldata = qdata[-1]
+                    
                 if ldata is not None:
                     self.livefeed.add_data(sensor, ldata)
+                    
                 if self.logdir is not None:
                     if sensor not in self.csvdata:
                         self.csvdata[sensor] = []
                     self.csvdata[sensor].append(ldata)
                 elif not self.plotting: # pragma: no cover
-                    print("{0}: {1: <20f}  {2: <20f}".format(sensor, *data))
+                    print("{}: {}".format(sensor, ldata))
 
+                if self.aggregate:
+                    aggdata[sensor] = ldata
+
+            #Now that we have processed all the physical sensors, let's see if
+            #we have any aggregate sensors that need to be processed. 
+            if self.aggregate:
+                for aggsense, aggfun in self.aggregate.items():
+                    adata = aggfun(aggdata)
+                    self.livefeed.add_data(aggsense, adata)
+                    if self.logdir is not None:
+                        if aggsense not in self.csvdata:
+                            self.csvdata[aggsense] = []
+                        self.csvdata[aggsense].append(adata)
+                    elif not self.plotting: # pragma: no cover
+                        print("{}: {}".format(aggsense, adata))
+                        
             #Before we restart the timer again, see if we need to save the data to
             #CSV.
             self.save()
@@ -256,7 +318,11 @@ class Logger(object):
                 logids.insert(0, 0)
                 writer = csv.writer(f)                    
                 for idata in self.csvdata[sensor]:
-                    writer.writerow([idata[li] for li in logids])
+                    if idata is not None:
+                        #Sometimes, the aggregate data functions return None
+                        #because one of the sensors didn't have data ready when
+                        #the aggregation was performed. Just ignore those.
+                        writer.writerow([idata[li] for li in logids])
                     
                 #Since we appended the most recent data points, just reset the
                 #lists of points to be empty again.
