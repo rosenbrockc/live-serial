@@ -85,7 +85,8 @@ def sensors(config, sensor=None, port=None, monitor=None):
         for sensor_n, instance in _sensors.items():
             if instance.port == port:
                 instance.monitor = monitor
-                instance.port = monitor.port
+                if monitor is not None:
+                    instance.port = monitor.port
                 result[sensor_n] = instance
     elif sensor is not None:
         if sensor in _sensors:
@@ -264,7 +265,16 @@ def reset_config():
     _plot_parsed = False
     _script = {}
     _script_parsed = False
-    
+
+def _parse_transform(function):
+    """Parses the transform function's fqdn to return the function that can
+    actually transform the data.
+    """
+    if "numpy" in function:
+        import numpy as np
+
+    return eval(function)            
+
 class Sensor(object):
     """Represents the configuration of a sensor on the serial port.
 
@@ -272,15 +282,34 @@ class Sensor(object):
         monitor (ComMonitorThread): parent instance that this sensor is being logged
           with.
         name (str): name of the sensor in the configuration file.
+        key (str): sensor key as it will be written to the serial stream, or `None`
+          if there isn't a key in the stream (i.e., only values).
+        value_index (list): column index/indices of the value that will
+          be plotted.
         dtype (list): of `str` or `type`; items must belong to ['key', int, float,
           str]. Represents the order in which values are found in a single line of
           data read from the serial port. Thus `W 129229 0.928379` would be given by
           ["key", int, float].
         label (str): for plots, what to put on the y-axis. Defaults to `name`.
         port (str): name of the port to read this sensor from. Defaults to
-          :attr:`ComMonitorThread.port`.
-        value_index (list): column index/indices of the value that will
-          be plotted.
+          :data:`ComMonitorThread.port`.
+        logging (str): comma-separated list of columns indices (zero-based) to
+            include in the log file. If not specified, then the default is to
+            include *all* data columns in the log file.
+        columns (str): comma-separated list of columns headings for the CSV file;
+            these are written in the first row of the file. If excluded, they
+            default to `Time` and `Value1`, `Value2`, etc.
+        legends (str): if the comma-separated list in `value_index` includes more
+            than one index, multiple lines are plotted on the same subplot. In that
+            case, `legends` allows a comma-separated list of legend labels to be
+            provided for each of those lines.
+        sensors (str): comma-separated list of sensor names to include in the data
+            vector that will be passed to `function` to be aggregated to a single
+            value. This only applies to the case of aggregate sensors.
+        function (str): name of a function to use to transform the data. Only
+            applies to the case of aggregate sensors.
+        kwargs (dict): additional keyword arguments supported that do not require
+            special processing (i.e., are just simple string values).
 
     Attributes:
         options (dict): additional keyword arguments (or configurable options) for
@@ -288,7 +317,8 @@ class Sensor(object):
     """
     def __init__(self, monitor, name, key=None, value_index=None,
                  dtype=["key", "int", "float"], label=None, port=None,
-                 logging=None, columns=None, legends=None, **kwargs):
+                 logging=None, columns=None, legends=None, function=None,
+                 sensors=None, **kwargs):
 
         self.monitor = monitor
         self.name = name
@@ -306,7 +336,10 @@ class Sensor(object):
         for i, sentry in enumerate(dtype):
             if sentry == "key":
                 self._keyloc = i
-                if key is None:
+                if key is None and port != "aggregate":
+                    #For aggregate ports, we relax this condition since the
+                    #sensors being aggregated have the dtypes specified
+                    #correctly.
                     raise ValueError("You must specify a sensor key if 'key' "
                                      "is in the 'dtype' option list.")
             else:
@@ -319,8 +352,15 @@ class Sensor(object):
         self.logging = _config_split(logging, ',', int)
         self.columns = _config_split(columns, ',')
         self.legends = _config_split(legends, ',')
-        self.options = kwargs
+        self.sensors = _config_split(sensors, ',')
         
+        if function is not None:
+            self.transform = _parse_transform(function)
+        else:
+            self.transform = None
+        
+        self.options = kwargs
+               
     def _cast(self, raw):
         """Casts all the values in the given list to their relevant data
         types. Assumes that the list has the correct format.

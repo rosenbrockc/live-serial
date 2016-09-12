@@ -24,12 +24,16 @@ possible options can be specified as `key=value` pairs:
 - **port** name of the serial port on the local machine that this sensor's data
   will arive at.
 - **label** for plotting, what label to include on the `y` axis.
-- **value_index** when multiple columns are present, this is the column index
-  (0-based) that will be used for plotting.
+- **value_index** when multiple columns are present, a comma-separated list of
+  column indices (0-based) that will be used for plotting. These columns will be
+  included on the *same* subplot of the figure. They can be labelled using the
+  *legends* option (described below).  
 - **logging** comma-separated list of 0-based column indices to include in the
   log file generated for this sensor.
 - **columns** comma-separated list of custom column names to use in the CSV
   files. There should be the same number of entries in *logging* and *columns*.
+- **legends** comma-separated list of legend labels for cases where more than
+  one index is specified in `value_index`.
 
 **Note**: if a *key* is not specified, then one will be auto-generated using the
 :meth:`id` of the :class:`~liveserial.monitor.ComMonitorThread` object instance
@@ -38,6 +42,31 @@ assigned to the port where the data originated from.
 Since the config file format is extensible, it is easy to add additional options
 later on. The default :class:`~ConfigParser.ConfigParser` is used to extract the
 sections (sensors) and their options.
+
+Aggregate Sensor Types
+----------------------
+
+In addition to physical sensors on serial ports, we can also plot aggregate
+information for multiple sensors. For example, suppose we know that the sum of
+two sensor values should be conserved, then we could configure an aggregate
+sensor to take the sum of the two physical sensor values.
+
+.. code-block:: ini
+		
+   [sensor.total]
+   port=aggregate
+   label=Total Sensor
+   value_index=1,2
+   sensors=cardio,weight
+   function=sum
+   legends=I,F
+   columns=isum,fsum
+
+This takes the total of `cardio` and `weight` physical sensor values and sums
+them (each column is summed separately) to create a new, aggregate sensor called
+`total`. The columns in the CSV file are labeled `isum` and `fsum` respectively
+and the plotting will show two lines on the subplot, with legend labels of `I`
+and `F`.
 
 Port Configuration Options
 --------------------------
@@ -59,3 +88,57 @@ options are possible:
   accurate timestamps, but it will also consume more CPU. Default `0.01`.
 - **virtual**: when True, additional serial port parameters are set so that the
   monitor can work with `socat` or other virtual ports. Default `0`.
+- **encoding**: by default, we assume the encoding on the serial port to be
+  `UTF-8`. If it is different, then specify the encoding here; a common
+  alternative option is `ASCII`, though we have also seen `UTF-16` before.
+- **delimiter**: by default, we assume whitespace separated values on each line
+  of the serial stream. If you use `,` or `|` or something else, specify it
+  here. The value *is interpreted as regular expression* (hence the default valued
+  of `\s`).
+  
+Script Configuration Options
+----------------------------
+
+Any of the options that can be passed as command-line arguments to the script
+can also be set in the configuration file under the `[global]` section
+heading. These are documented internally in the `livemon.py` script and can be
+seen by executing `livemon.py -h`.
+
+.. autodata:: liveserial.livemon.script_options
+   :annotation: Default script parameter arguments.
+
+Plotting Configuration Options
+------------------------------
+
+`matplotlib` is used for plotting the live serial feeds. Within that framework,
+we have the following support:
+
+- **figure**: describes options that are passed as keyword arguments to
+  :func:`~matplotlib.pyplot.figure` when the plot is initialized.
+- **axes**: keyword arguments passed to :meth:`~matplotlib.figure.Figure.add_subplots`,
+  which can override initialization behavior of the axes.
+- **label**: keyword arguments passed to :meth:`~matplotlib.axes.Axes.set_xlabel`
+  and :meth:`~matplotlib.axes.Axes.set_ylabel`. They can format the font-size, color,
+  etc. of the axes labels on the subplots.
+- **ticks**: keyword arguments passed to :func:`~matplotlib.pyplot.tick_params`
+  once the plot has been initialized to format the ticks on the subplots.
+
+To override the keyword arguments, specify an option in a section (labelled
+`[plot.figure]`, `[plot.axes]`, `[plot.label]` or `[plot.ticks]`) that has the
+same name as the keyword argument and then the new value. For example, to
+override the font size on the axes labels, I would use `fontsize=12` in a
+`[plot.label]` section of the configuration file.
+  
+Note that we do *not* cast the string values from the config file except in the
+case of `figsize` for the *figure* options. However, for most of the useful
+matplotlib keywords, this is not a problem since instead of a number like `12`,
+matplotlib accepts strings with units (e.g., `12pt`) which can be parsed. For
+strings without units specified, it will also usually interpret the string using
+whatever the default units are for the method/function call.
+		
+Configuration Objects
+---------------------
+
+
+.. automodule:: liveserial.config
+   :members:

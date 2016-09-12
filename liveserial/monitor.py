@@ -175,7 +175,7 @@ class ComMonitorThread(threading.Thread):
         serial_arg (dict): arguments used to contstruct the :class:`serial.Serial`.
         serial_port (serial.Serial): serial instance for communication.
         sensors (dict): keys are sensor names; values are
-          :class:`liveserial.config.Sensor`instances used to
+          :class:`liveserial.config.Sensor` instances used to
           parse raw lines read from the serial port.
         inferrer (FormatInferrer): for inferring the format in the absence of
             configured sensor structure.
@@ -294,7 +294,8 @@ class ComMonitorThread(threading.Thread):
         from liveserial.config import sensors, Sensor
         sdict = sensors(config, port=port, monitor=result)
         for sensor, instance in sdict.items():
-            result.add_sensor(sensor, instance)
+            if (sfilter is None or sfilter == "all") or sensor in sfilter:
+                result.add_sensor(sensor, instance)
 
         return result
 

@@ -18,13 +18,20 @@ def examples():
                 ("Log the data, but don't generate a live plot.",
                  "livemon.py COM3 -noplot -logdir C:\\sensordata\\", ""),
                 ("List the available serial ports on the system.",
-                 "livemon.py list", "")]
+                 "livemon.py list", ""),
+                ("Use the config file `custom.cfg` to log and plot the data. "
+                 "Plot any sensors listed in that file.",
+                 "livemon.py auto -config custom.cfg",
+                 "If your file is called `sensors.cfg`, you can just use "
+                 "`livemon.py auto`.")]
     required = ("REQUIRED: working serial port.")
     output = ("RETURNS: plot window; for logging-only mode, the data being "
               "logged is also periodically printed to stdout.")
     details = ("The plotting uses `matplotlib` with the default configured "
                "backend. If you want a different backend, set the rc config "
-               "for `matplotlib` using online documentation.")
+               "for `matplotlib` using online documentation. However, many "
+               "backends don't play well with the animation (depending on OS "
+               "type and version, etc., etc.; so use carefully.")
     outputfmt = ("")
 
     msg.example(script, explain, contents, required, output, outputfmt, details)
@@ -136,6 +143,9 @@ script_options = {
                   help=("Number of seconds to wait before failing because "
                         "no data is present on the stream for plotting."))
     }
+"""dict: default command-line arguments and their
+    :meth:`argparse.ArgumentParser.add_argument` keyword arguments.
+"""
 
 def _parser_options():
     """Parses the options and arguments from the command line."""
@@ -198,9 +208,13 @@ def _get_com(args):
     msg.info("Starting setup of ports {}.".format(args["port"]), 2)
     if args["config"]:
         for port in args["port"]:
-            com = CMT.from_config(args["config"], port, dataq, errorq,
-                                  args["listen"], args["sensors"])
-            result.append(com)                                            
+            if port.lower() != "aggregate":
+                #The aggregate port name is just a shortcut so that we can plot
+                #transforms between multiple sensor streams. It doesn't actually
+                #represent a physical port that will be monitored.
+                com = CMT.from_config(args["config"], port, dataq, errorq,
+                                      args["listen"], args["sensors"])
+                result.append(com)                               
     else:
         for port in args["port"]:
             com = CMT(dataq, errorq, port, args["baudrate"],
@@ -236,9 +250,13 @@ def run(args, runtime=None, testmode=False):
     plotting or logging based on command-line args.
 
     Args:
+        args (dict): result of :func:`_parser_options` call that parses the
+          command-line arguments. Could also be :data:`script_options` to use all
+          default values.
         runtime (float): how many seconds to run for before terminating.
-        vardir (dict): to get access to the COM port, logger, feed and plotter
-          objects.
+        testmode (bool): when True, the plotting backend is changed so that no
+          window is produced; plotting functions are altered slightly to make
+          testing possible.
     """
     from liveserial.base import set_testmode
     set_testmode(testmode)    
@@ -268,7 +286,8 @@ def run(args, runtime=None, testmode=False):
     plotting = args["listen"] or (not args["noplot"])
     logger = Logger(args["buffertime"], dataqs, feed,
                     args["method"], args["logdir"], args["logfreq"],
-                    plotting, args["config"])
+                    plotting, args["config"],
+                    aggregate="aggregate" in args["port"])
     
     import signal
     def exit_handler(signal, frame): # pragma: no cover
