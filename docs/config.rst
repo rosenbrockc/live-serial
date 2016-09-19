@@ -123,7 +123,8 @@ we have the following support:
 - **ticks**: keyword arguments passed to :func:`~matplotlib.pyplot.tick_params`
   once the plot has been initialized to format the ticks on the subplots.
 - **animation**: option for controlling the animation class used by
-  `matplotlib`. Currently, only the `blit` option is supported.
+  `matplotlib`. Currently, only the `blit` option is supported. It takes a value
+  of `1` if blitting should be enabled.
 
 To override the keyword arguments, specify an option in a section (labelled
 `[plot.figure]`, `[plot.axes]`, `[plot.label]` or `[plot.ticks]`) that has the
