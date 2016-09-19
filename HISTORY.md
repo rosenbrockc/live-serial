@@ -1,5 +1,9 @@
 # `live-serial` Revision History
 
+## Revision 0.1.5
+
+- Fixed logic reversal in `blit` default values.
+
 ## Revision 0.1.4
 
 - Fixes issues #19 and #20.
