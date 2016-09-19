@@ -87,7 +87,8 @@ class Plotter(animation.TimedAnimation):
 
         if len(self._plotorder) == 0: # pragma: no cover
             raise ValueError("Live feed has no sensor data keys. "
-                             "Can't setup plotting.")
+                             "Can't setup plotting. Try fiddling with the "
+                             "`-wait` parameter.")
 
         #For the plot styling, we use the config files. Logger has access to the
         #config file setting, so we just use that.
@@ -164,7 +165,17 @@ class Plotter(animation.TimedAnimation):
                 #do the costly redraw at every iteration.
                 animation.TimedAnimation.__init__(self, fig, blit=False)
             else:
-                animation.TimedAnimation.__init__(self, fig, blit=True)
+                #If blitting is enabled, the plot labels don't update with
+                #auto-scaling. Since our machines are fast enough, we make it
+                #true by default. The user can override it using an option in
+                #the config file if they need the extra speed.
+                animopts = plot(self.logger.config, "animation")
+                if "blit" not in animopts:
+                    blit = True
+                else:
+                    blit = animopts["blit"] == 1
+                    
+                animation.TimedAnimation.__init__(self, fig, blit=blit)
         else:
             self._init_draw()
             self.new_frame_seq()
@@ -182,7 +193,7 @@ class Plotter(animation.TimedAnimation):
         for sensor in self._plotorder:
             #First, we get the latest data point from the live feed.
             ldata = self.livefeed.read_data(sensor)
-            if len(ldata) < 2:
+            if len(ldata) < 2: # pragma: no cover
                 #We don't have anything reasonable to plot; exit gracefully.
                 continue
             

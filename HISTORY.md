@@ -1,5 +1,9 @@
 # `live-serial` Revision History
 
+## Revision 0.1.4
+
+- Fixes issues #19 and #20.
+
 ## Revision 0.1.3
 
 - Added support for aggregate sensor types that combine data from other sensors

@@ -270,7 +270,7 @@ def _parse_transform(function):
     """Parses the transform function's fqdn to return the function that can
     actually transform the data.
     """
-    if "numpy" in function:
+    if "numpy" in function: # pragma: no cover
         import numpy as np
 
     return eval(function)            

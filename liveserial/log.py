@@ -215,7 +215,7 @@ class Logger(object):
                 if self.logdir is not None:
                     if sensor not in self.csvdata:
                         self.csvdata[sensor] = []
-                    self.csvdata[sensor].append(ldata)
+                    self.csvdata[sensor].extend(qdata)
                 elif not self.plotting: # pragma: no cover
                     print("{}: {}".format(sensor, ldata))
 
@@ -289,11 +289,11 @@ class Logger(object):
                              "logging ids was specified in configuration.")
             else:
                 logids = None
-                vindex = [0]
+                vindex = [1]
                         
             if logids is None:
                 #The user didn't say what to log, so we log everything.
-                logids = list(range(N))
+                logids = list(range(1, N+1))
 
             logpath = path.join(self.logdir, "{}.csv".format(sensor))
             from os import linesep
