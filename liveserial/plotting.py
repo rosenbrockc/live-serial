@@ -171,9 +171,9 @@ class Plotter(animation.TimedAnimation):
                 #the config file if they need the extra speed.
                 animopts = plot(self.logger.config, "animation")
                 if "blit" not in animopts:
-                    blit = True
+                    blit = False
                 else:
-                    blit = animopts["blit"] == 1
+                    blit = animopts["blit"] == "1"
                     
                 animation.TimedAnimation.__init__(self, fig, blit=blit)
         else:
