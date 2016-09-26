@@ -342,7 +342,7 @@ def run(args, runtime=None, testmode=False):
     if not args["noplot"] and not args["listen"]:
         tries = 0
         maxtries = args["wait"]/0.05
-        while not logger.ready(0.05) and tries <= maxtries:
+        while not logger.ready(0.05, args["wait"]) and tries <= maxtries:
             tries += 1
 
         from liveserial.plotting import Plotter

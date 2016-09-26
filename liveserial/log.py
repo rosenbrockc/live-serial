@@ -137,7 +137,7 @@ class Logger(object):
         else: # pragma: no cover
             return default
                         
-    def ready(self, delay=None):
+    def ready(self, delay=None, wait=1.):
         """Returns True once we have accumulated a few timer calls of data. This
         ensures that we know how many sensors are running on the same COM port.
 
@@ -153,8 +153,9 @@ class Logger(object):
         if len(self.csvdata) > 0:
             datapoints = sum([len(v) for v in self.csvdata.values()])/len(self.csvdata)
             havepts = datapoints > 2
-
-        return self._timer_calls > 5 and (self.logdir is None or havepts)
+            
+        return (self._timer_calls > wait/self.interval
+                and (self.logdir is None or havepts))
         
     def start(self):
         """Starts a new timer for the configured interval to gather data from
