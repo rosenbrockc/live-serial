@@ -35,10 +35,14 @@ possible options can be specified as `key=value` pairs:
 - **legends** comma-separated list of legend labels for cases where more than
   one index is specified in `value_index`.
 
-**Note**: if a *key* is not specified, then one will be auto-generated using the
-:meth:`id` of the :class:`~liveserial.monitor.ComMonitorThread` object instance
-assigned to the port where the data originated from.
-  
+.. note:: if a *key* is not specified, then one will be auto-generated using the
+   :meth:`id` of the :class:`~liveserial.monitor.ComMonitorThread` object
+   instance assigned to the port where the data originated from.
+      
+.. note:: for the *value_index* and *logging* options, they are
+   zero-based. However, the zero index is **reserved** for the timestamp of the
+   local computer. You can reference it in these options using `0`.
+
 Since the config file format is extensible, it is easy to add additional options
 later on. The default :class:`~ConfigParser.ConfigParser` is used to extract the
 sections (sensors) and their options.
