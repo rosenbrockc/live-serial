@@ -107,6 +107,8 @@ seen by executing `livemon.py -h`.
 .. autodata:: liveserial.livemon.script_options
    :annotation: Default script parameter arguments.
 
+.. include:: scriptargs.rst
+		
 Plotting Configuration Options
 ------------------------------
 

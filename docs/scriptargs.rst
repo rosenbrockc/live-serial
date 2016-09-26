@@ -1,0 +1,19 @@
+- **refresh**: How often (in milliseconds) to plot new data obtained from the serial port. Default: 100 (int).
+- **method**: Specifies how buffered data is aggregated each time it is read from the serial port. Default: average (str).Must be one of ['last', 'average']
+- **maxpts**: Maximum number of values to keep in the plot for each sensor Default: 100 (int).
+- **config**: Specify a configuration file to get sensor setup information from. Default: None (str).
+- **sensors**: Filter the list of sensors being logged/plotted. Default: all (str).
+- **noplot**: Don't plot the data; only log it. Default: None (bool).
+- **parity**: Serial communication parameter. Default: N (str).Must be one of ['N', 'E', 'O', 'M', 'S']
+- **buffertime**: How often (in milliseconds) to query buffered data obtained from the serial port. Default: 25 (float).
+- **ort**: Name of the port(s) to plot/log. Default: None (str).
+- **wait**: Number of seconds to wait before failing because no data is present on the stream for plotting. Default: 1.0 (float).
+- **timeout**: The timeout used for reading the COM port. If this value is low, the thread will return data in finer grained chunks, with more accurate timestamps, but it will also consume more CPU. Default: 0.01 (float).
+- **listen**: Prints the raw output from the serial port instead of plotting and logging it. Useful for debugging port connection issues. Default: None (bool).
+- **autoconf**: Runs in automatic mode by loading a configuration file in the current directory called 'sensors.cfg'. Default: None (bool).
+- **stopbits**: Serial communication parameter. Default: 1.0 (float).Must be one of [1, 1.5, 2]
+- **baudrate**: Rate at which information is transferred in a communication channel (in bits/second). Default: 9600 (int).
+- **logdir**: Path to the directory where sensor data will be logged. Default: None (str).
+- **window**: Width of window in time units. Default: 20.0 (float).
+- **logfreq**: How often (in *seconds*) to save the buffered data points to CSV. Default: 10 (float).
+- **virtual**: Specifies that the port being connected to is virtual (e.g., with `socat`), which changes the parameters for connection. Default: None (bool).

@@ -1,5 +1,4 @@
 # Makefile for Sphinx documentation
-#
 
 # You can set these variables from the command line.
 SPHINXOPTS    =
@@ -48,8 +47,10 @@ help:
 clean:
 	rm -rf $(BUILDDIR)/*
 
+# Make sure we have the latest script arguments.
 .PHONY: html
 html:
+	python scriptargs.py
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
