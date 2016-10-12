@@ -275,7 +275,7 @@ class Logger(object):
                     #It is possible that the user will specify one or the other,
                     #but I want to limit the number of concurrent streams for
                     #the unit tests (especially for multi-port testing).
-                    logids = list(range(len(cols)))
+                    logids = list(range(1, len(cols)+1))
 
                 vindex = self.sensor_option(sensor, "value_index", [0])
 
@@ -316,8 +316,9 @@ class Logger(object):
             with open(logpath, mode, **kwds) as f:
                 #We log the full data stream from the sensor unless the logging is
                 #limited by the configuration file.
-                logids.insert(0, 0)
-                writer = csv.writer(f)                    
+                if 0 not in logids:
+                    logids.insert(0, 0)
+                writer = csv.writer(f)
                 for idata in self.csvdata[sensor]:
                     if idata is not None:
                         #Sometimes, the aggregate data functions return None

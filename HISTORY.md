@@ -1,5 +1,10 @@
 # `live-serial` Revision History
 
+## Revision 0.1.7
+
+- Fixed a bug that kept inserting the time column into the CSV write each time the logging was called.
+- Also fixed a bug that would not log all the columns if only the columns option is specified.
+
 ## Revision 0.1.6
 
 - Made the `-wait` parameter be an explicit wait time before any plotting is attempted. This addresses issue #23 as well.
